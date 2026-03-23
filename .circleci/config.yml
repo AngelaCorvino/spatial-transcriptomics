@@ -1,0 +1,33 @@
+version: 2.1
+
+orbs:
+  python: circleci/python@2.1.1
+
+workflows:
+  test:
+    jobs:
+      - test
+
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+          app-dir: .
+          pip-dependency-file: pyproject.toml
+          extra-restore-cache-key: dev
+      - run:
+          name: Install dev dependencies
+          command: pip install -e .[dev]
+      - run:
+          name: Run ruff
+          command: ruff check .
+      - run:
+          name: Run mypy
+          command: mypy .
+      - run:
+          name: Run pytest
+          command: pytest
