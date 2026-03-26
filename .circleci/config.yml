@@ -17,7 +17,7 @@ jobs:
       - python/install-packages:
           pkg-manager: pip
           app-dir: .
-          pip-dependency-file: pyproject.toml
+          pip-dependency-file: requirements-dev.txt
 
       - run:
           name: Install dev dependencies
