@@ -24,7 +24,7 @@ jobs:
           command: pip install -e .[dev]
       - run:
           name: Run ruff
-          command: ruff check src tests .
+          command: ruff check src tests
       - run:
           name: Run mypy
           command: mypy src tests

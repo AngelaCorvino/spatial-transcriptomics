@@ -1,5 +1,7 @@
 """Analysis helpers for spatial transcriptomics notebooks and scripts."""
 
+from __future__ import annotations
+
 from typing import Any
 
 
@@ -30,15 +32,15 @@ def cluster_and_umap(
     return adata
 
 
-def compute_statistics(adata: Any) -> dict[str, float]:
+def compute_statistics(adata: Any) -> dict[str, int | float]:
     """Compute a small set of summary statistics from an AnnData-like object."""
-    stats = {
+    stats: dict[str, int | float] = {
         "n_obs": int(getattr(adata, "n_obs", 0)),
         "n_vars": int(getattr(adata, "n_vars", 0)),
     }
 
     total_counts = getattr(getattr(adata, "obs", {}), "get", lambda *_: None)(
-        "total_counts"
+        "total_counts",
     )
     if total_counts is not None:
         stats["mean_counts"] = float(total_counts.mean())
@@ -51,7 +53,7 @@ def compute_statistics(adata: Any) -> dict[str, float]:
     return stats
 
 
-def prepare_results(adata: Any, stats: dict[str, float]) -> dict[str, Any]:
+def prepare_results(adata: Any, stats: dict[str, int | float]) -> dict[str, Any]:
     """Prepare the notebook analysis payload for downstream export."""
     return {
         "data": adata,

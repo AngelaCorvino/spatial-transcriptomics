@@ -4,17 +4,19 @@ Loads configuration from local_config.yaml or provides sensible defaults.
 Avoids hardcoded absolute paths in notebooks.
 """
 
-import os
+from __future__ import annotations
+
+import warnings
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 try:
     import yaml
 except ImportError:
-    yaml = None  # type: ignore
+    yaml = None
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Load configuration from local_config.yaml or return defaults.
 
     Returns:
@@ -23,7 +25,7 @@ def load_config() -> Dict[str, Any]:
     repo_root = Path(__file__).parent.parent.parent
     local_config_path = repo_root / "local_config.yaml"
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "repo_root": str(repo_root),
         "data_dir": str(repo_root / "data"),
         "output_dir": str(repo_root / "results"),
@@ -32,11 +34,14 @@ def load_config() -> Dict[str, Any]:
 
     if local_config_path.exists() and yaml is not None:
         try:
-            with open(local_config_path) as f:
+            with local_config_path.open() as f:
                 local_config = yaml.safe_load(f) or {}
                 config.update(local_config)
-        except Exception as e:
-            print(f"Warning: Failed to load local_config.yaml: {e}")
+        except (OSError, yaml.YAMLError) as exc:
+            warnings.warn(
+                f"Failed to load local_config.yaml: {exc}",
+                stacklevel=2,
+            )
 
     return config
 

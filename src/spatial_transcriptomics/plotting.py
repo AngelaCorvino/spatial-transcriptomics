@@ -4,8 +4,9 @@ Provides functions for visualization of cell type composition,
 differential expression results, and other analysis outputs.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,7 +17,7 @@ def stacked_bar(
     df: pd.DataFrame,
     value_col: str,
     title: str,
-    outfile: Union[str, Path],
+    outfile: str | Path,
     only_immune: bool = False,
 ) -> None:
     """Create stacked bar plot grouped by sample and condition.
@@ -36,11 +37,13 @@ def stacked_bar(
         d = d[d["celltype_is_immune"]].copy()
 
     # Order mice by condition then sample
-    order = (
-        d[["sample", "condition"]].drop_duplicates().sort_values(["condition", "sample"])
+    order = d[["sample", "condition"]].drop_duplicates().sort_values(
+        ["condition", "sample"],
     )
     d["sample"] = pd.Categorical(
-        d["sample"], categories=order["sample"], ordered=True
+        d["sample"],
+        categories=order["sample"],
+        ordered=True,
     )
 
     piv = (
@@ -61,20 +64,21 @@ def stacked_bar(
 
     # X labels as "sample\ncondition"
     ax.set_xticklabels(
-        [f"{s}\n{c}" for (s, c) in piv.index], rotation=0, ha="center"
+        [f"{s}\n{c}" for (s, c) in piv.index],
+        rotation=0,
+        ha="center",
     )
 
     plt.tight_layout()
     plt.savefig(outfile, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Saved: {outfile}")
 
 
 def summary_dotplot(
     df: pd.DataFrame,
     value_col: str,
     title: str,
-    outfile: Union[str, Path],
+    outfile: str | Path,
     only_immune: bool = False,
 ) -> None:
     """Create dotplot with error bars (mean ± SEM) per condition and celltype.
@@ -112,7 +116,7 @@ def summary_dotplot(
     if len(conditions) == 1:
         axes = [axes]
 
-    for ax, cond in zip(axes, conditions):
+    for ax, cond in zip(axes, conditions, strict=True):
         sub = summ[summ["condition"] == cond].sort_values("mean", ascending=False)
         ax.errorbar(sub["mean"], sub["celltype"], xerr=sub["sem"], fmt="o")
         ax.set_title(str(cond))
@@ -123,7 +127,6 @@ def summary_dotplot(
     plt.tight_layout()
     plt.savefig(outfile, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Saved: {outfile}")
 
 
 def pretty_title(contrast: str) -> str:

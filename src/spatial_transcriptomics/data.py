@@ -1,7 +1,9 @@
 """Data loading and preprocessing helpers for spatial transcriptomics."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -13,7 +15,7 @@ def _load_scanpy() -> Any:
         import scanpy as sc
     except ImportError as exc:
         raise ImportError(
-            "scanpy is required for data loading and preprocessing helpers."
+            "scanpy is required for data loading and preprocessing helpers.",
         ) from exc
     return sc
 
@@ -24,12 +26,12 @@ def _load_squidpy() -> Any:
         import squidpy as sq
     except ImportError as exc:
         raise ImportError(
-            "squidpy is required to read Visium directories."
+            "squidpy is required to read Visium directories.",
         ) from exc
     return sq
 
 
-def load_reference_genes(gene_file: Union[str, Path]) -> List[str]:
+def load_reference_genes(gene_file: str | Path) -> list[str]:
     """Load a newline-delimited gene list from disk."""
     path = Path(gene_file)
     if not path.exists():
@@ -39,7 +41,7 @@ def load_reference_genes(gene_file: Union[str, Path]) -> List[str]:
         return [line.strip() for line in handle if line.strip()]
 
 
-def load_data(data_path: Union[str, Path]) -> Any:
+def load_data(data_path: str | Path) -> Any:
     """Load spatial transcriptomics data from a file or Visium directory.
 
     Supported inputs:
@@ -57,8 +59,11 @@ def load_data(data_path: Union[str, Path]) -> Any:
         sq = _load_squidpy()
         adata = sq.read.visium(path)
     else:
-        raise ValueError(
+        message = (
             f"Unsupported data path: {path}. Expected a .h5ad file or Visium folder."
+        )
+        raise ValueError(
+            message,
         )
 
     adata.var_names_make_unique()
@@ -67,8 +72,8 @@ def load_data(data_path: Union[str, Path]) -> Any:
 
 def calc_qc_metrics(
     adata: Any,
-    mt_genes: Optional[List[str]] = None,
-    rp_genes: Optional[List[str]] = None,
+    mt_genes: list[str] | None = None,
+    rp_genes: list[str] | None = None,
 ) -> Any:
     """Calculate standard QC metrics plus MT/RP percentages when provided."""
     sc = _load_scanpy()
@@ -104,9 +109,9 @@ def calc_qc_metrics(
 def filter_by_quality(
     adata: Any,
     min_counts: int = 500,
-    max_counts: Optional[int] = None,
+    max_counts: int | None = None,
     min_genes: int = 250,
-    max_genes: Optional[int] = None,
+    max_genes: int | None = None,
     max_pct_mt: float = 20.0,
     max_pct_rp: float = 30.0,
 ) -> tuple[Any, pd.DataFrame]:
@@ -161,12 +166,12 @@ def normalize_and_log(adata: Any, target_sum: float = 1e4) -> Any:
 
 def preprocess_data(
     adata: Any,
-    mt_genes: Optional[List[str]] = None,
-    rp_genes: Optional[List[str]] = None,
+    mt_genes: list[str] | None = None,
+    rp_genes: list[str] | None = None,
     min_counts: int = 500,
-    max_counts: Optional[int] = None,
+    max_counts: int | None = None,
     min_genes: int = 250,
-    max_genes: Optional[int] = None,
+    max_genes: int | None = None,
     max_pct_mt: float = 20.0,
     max_pct_rp: float = 30.0,
     target_sum: float = 1e4,
@@ -185,7 +190,7 @@ def preprocess_data(
     return normalize_and_log(adata, target_sum=target_sum)
 
 
-def read_de_csv(path: Union[str, Path]) -> pd.DataFrame:
+def read_de_csv(path: str | Path) -> pd.DataFrame:
     """Read DESeq2 results CSV."""
     df = pd.read_csv(path, index_col=0)
     df.index = df.index.astype(str)
@@ -193,8 +198,11 @@ def read_de_csv(path: Union[str, Path]) -> pd.DataFrame:
     required = {"stat", "padj"}
     missing = required.difference(df.columns)
     if missing:
-        raise ValueError(f"{Path(path).name}: missing columns {sorted(missing)}")
+        message = f"{Path(path).name}: missing columns {sorted(missing)}"
+        raise ValueError(message)
 
-    df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=["stat", "padj"])
-    df = df[~df.index.duplicated(keep="first")]
-    return df
+    return (
+        df.replace([np.inf, -np.inf], np.nan)
+        .dropna(subset=["stat", "padj"])
+        .loc[lambda data: ~data.index.duplicated(keep="first")]
+    )
