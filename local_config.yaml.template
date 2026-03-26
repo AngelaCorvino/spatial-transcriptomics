@@ -1,0 +1,20 @@
+# Local Configuration Template
+# 
+# Copy this file to local_config.yaml and fill in your LOCAL paths.
+# This file is gitignored to prevent committing local absolute paths.
+# 
+# The config.load_config() function will merge these settings with defaults.
+
+# Absolute path to data directory (optional - defaults to repo_root/data)
+# data_dir: /Users/your_username/path/to/large/data/directory
+
+# Absolute path to output/results directory (optional - defaults to repo_root/results)
+# output_dir: /Users/your_username/path/to/output/directory
+
+# Cache directory (optional - defaults to repo_root/.cache)
+# cache_dir: /Users/your_username/path/to/cache
+
+# Analysis-specific settings (add as needed)
+# analysis:
+#   n_hvg: 2000
+#   resolution: 1.0

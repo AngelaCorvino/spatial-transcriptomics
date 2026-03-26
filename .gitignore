@@ -55,3 +55,26 @@ venv.bak/
 *.swo
 *~
 .DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Large data files
+*.h5
+*.h5ad
+*.csv.gz
+*.zarr/
+*.parquet
+*.feather
+data/
+results/
+.cache/
+
+# Local configuration (with absolute paths)
+local_config.yaml
+local_config.toml
+local_config.json
+
+# Application cache
+.ruff_cache/
