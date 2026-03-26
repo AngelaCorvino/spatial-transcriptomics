@@ -24,10 +24,10 @@ jobs:
           command: pip install -e .[dev]
       - run:
           name: Run ruff
-          command: ruff check .
+          command: ruff check src tests .
       - run:
           name: Run mypy
-          command: mypy .
+          command: mypy src tests
       - run:
           name: Run pytest
           command: pytest
