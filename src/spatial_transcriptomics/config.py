@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any
-
 
 try:
     import yaml as yaml_module
@@ -17,7 +15,7 @@ except ImportError:
     yaml_module = None
 
 
-def load_config() -> dict[str, Any]:
+def load_config() -> dict[str, str]:
     """Load configuration from local_config.yaml or return defaults.
 
     Returns:
@@ -26,7 +24,7 @@ def load_config() -> dict[str, Any]:
     repo_root = Path(__file__).parent.parent.parent
     local_config_path = repo_root / "local_config.yaml"
 
-    config: dict[str, Any] = {
+    config: dict[str, str] = {
         "repo_root": str(repo_root),
         "data_dir": str(repo_root / "data"),
         "output_dir": str(repo_root / "results"),
