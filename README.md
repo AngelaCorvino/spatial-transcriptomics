@@ -1,3 +1,5 @@
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/AngelaCorvino/spatial-transcriptomics/tree/main.svg?style=svg&circle-token=CCIPRJ_JQSh1Eq1csJcHWEAAEGPV8_a1c0c9e66cef5d7a55f20e6a1a2890d978b3a486)](https://dl.circleci.com/status-badge/redirect/gh/AngelaCorvino/spatial-transcriptomics/tree/main)
+
 # spatial-transcriptomics
 
 A modular Python package for spatial transcriptomics analysis with Jupyter notebook support.
