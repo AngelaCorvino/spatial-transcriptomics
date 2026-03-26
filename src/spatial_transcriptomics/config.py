@@ -10,10 +10,11 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+
 try:
-    import yaml
+    import yaml as yaml_module
 except ImportError:
-    yaml = None
+    yaml_module = None
 
 
 def load_config() -> dict[str, Any]:
@@ -32,12 +33,12 @@ def load_config() -> dict[str, Any]:
         "cache_dir": str(repo_root / ".cache"),
     }
 
-    if local_config_path.exists() and yaml is not None:
+    if local_config_path.exists() and yaml_module is not None:
         try:
             with local_config_path.open() as f:
-                local_config = yaml.safe_load(f) or {}
+                local_config = yaml_module.safe_load(f) or {}
                 config.update(local_config)
-        except (OSError, yaml.YAMLError) as exc:
+        except (OSError, yaml_module.YAMLError) as exc:
             warnings.warn(
                 f"Failed to load local_config.yaml: {exc}",
                 stacklevel=2,
