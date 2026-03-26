@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from spatial_transcriptomics.data import load_reference_genes, read_de_csv
+from spatial_transcriptomics.data import load_data, load_reference_genes, read_de_csv
 
 
 def test_load_reference_genes_returns_nonempty_lines(tmp_path: Path) -> None:
@@ -19,6 +19,12 @@ def test_load_reference_genes_returns_nonempty_lines(tmp_path: Path) -> None:
 def test_load_reference_genes_missing_file_returns_empty_list(tmp_path: Path) -> None:
     """Missing gene files should produce an empty list."""
     assert load_reference_genes(tmp_path / "missing.txt") == []
+
+
+def test_load_data_raises_for_missing_path(tmp_path: Path) -> None:
+    """Missing data paths should raise FileNotFoundError."""
+    with pytest.raises(FileNotFoundError):
+        load_data(tmp_path / "missing.h5ad")
 
 
 def test_read_de_csv_reads_valid_file(tmp_path: Path) -> None:

@@ -23,9 +23,9 @@ test:
 	$(PYTHON) -m pytest
 
 lint:
-	$(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff check src tests
 
 typecheck:
-	$(PYTHON) -m mypy .
+	$(PYTHON) -m mypy src tests
 
 check: test lint typecheck

@@ -1,8 +1,5 @@
 version: 2.1
 
-orbs:
-  python: circleci/python@2.1.1
-
 workflows:
   test:
     jobs:
@@ -14,11 +11,6 @@ jobs:
       - image: cimg/python:3.12
     steps:
       - checkout
-      - python/install-packages:
-          pkg-manager: pip
-          app-dir: .
-          pip-dependency-file: requirements-dev.txt
-
       - run:
           name: Install dev dependencies
           command: pip install -e .[dev]

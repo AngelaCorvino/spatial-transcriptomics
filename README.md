@@ -1,8 +1,12 @@
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/AngelaCorvino/spatial-transcriptomics/tree/main.svg?style=svg&circle-token=CCIPRJ_JQSh1Eq1csJcHWEAAEGPV8_a1c0c9e66cef5d7a55f20e6a1a2890d978b3a486)](https://dl.circleci.com/status-badge/redirect/gh/AngelaCorvino/spatial-transcriptomics/tree/main)
-
 # spatial-transcriptomics
 
 A modular Python package for spatial transcriptomics analysis with Jupyter notebook support.
+
+The repository is intentionally kept simple:
+- core code in `src/`
+- notebooks in `notebooks/`
+- tests in `tests/`
+- straightforward local commands through `make`
 
 ## Project Structure
 
@@ -52,6 +56,9 @@ make dev-install
 This creates a local `.venv/`, upgrades the Python packaging tools, and installs
 the package in editable mode.
 
+Core spatial analysis dependencies, including `scanpy` and `squidpy`, are
+installed as part of the package because the notebook workflow depends on them.
+
 Then start Jupyter from the repository root:
 
 ```bash
@@ -99,3 +106,5 @@ make test
 make lint
 make typecheck
 ```
+
+Both commands target `src/` and `tests/`, which matches the CI pipeline.

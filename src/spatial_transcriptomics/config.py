@@ -15,7 +15,7 @@ except ImportError:
     yaml_module = None
 
 
-def load_config() -> dict[str, str]:
+def load_config() -> dict[str, object]:
     """Load configuration from local_config.yaml or return defaults.
 
     Returns:
@@ -24,7 +24,7 @@ def load_config() -> dict[str, str]:
     repo_root = Path(__file__).parent.parent.parent
     local_config_path = repo_root / "local_config.yaml"
 
-    config: dict[str, str] = {
+    config: dict[str, object] = {
         "repo_root": str(repo_root),
         "data_dir": str(repo_root / "data"),
         "output_dir": str(repo_root / "results"),
@@ -45,6 +45,15 @@ def load_config() -> dict[str, str]:
     return config
 
 
+def _require_path_value(config: dict[str, object], key: str) -> str:
+    """Return a path config entry and validate it is a string."""
+    value = config[key]
+    if not isinstance(value, str):
+        message = f"Configuration value '{key}' must be a string path."
+        raise TypeError(message)
+    return value
+
+
 def get_data_path(filename: str) -> Path:
     """Get absolute path for a data file.
 
@@ -55,7 +64,7 @@ def get_data_path(filename: str) -> Path:
         Absolute path to the data file.
     """
     config = load_config()
-    return Path(config["data_dir"]) / filename
+    return Path(_require_path_value(config, "data_dir")) / filename
 
 
 def get_output_path(filename: str) -> Path:
@@ -68,6 +77,6 @@ def get_output_path(filename: str) -> Path:
         Absolute path to the output file.
     """
     config = load_config()
-    output_dir = Path(config["output_dir"])
+    output_dir = Path(_require_path_value(config, "output_dir"))
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir / filename
