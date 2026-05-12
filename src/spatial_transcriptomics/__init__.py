@@ -11,14 +11,12 @@ from .data import (
     preprocess_data,
     read_de_csv,
 )
-from .example import add
 from .plotting import pretty_title, stacked_bar, summary_dotplot
 
 __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
-    "add",
     "calc_qc_metrics",
     "cluster_and_umap",
     "compute_statistics",

@@ -116,7 +116,7 @@ def summary_dotplot(
     if len(conditions) == 1:
         axes = [axes]
 
-    for ax, cond in zip(axes, conditions, strict=True):
+    for ax, cond in zip(axes, conditions):
         sub = summ[summ["condition"] == cond].sort_values("mean", ascending=False)
         ax.errorbar(sub["mean"], sub["celltype"], xerr=sub["sem"], fmt="o")
         ax.set_title(str(cond))

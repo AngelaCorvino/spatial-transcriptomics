@@ -12,7 +12,7 @@ from pathlib import Path
 try:
     import yaml as yaml_module
 except ImportError:
-    yaml_module = None
+    yaml_module = None  # type: ignore[assignment]
 
 
 def load_config() -> dict[str, object]:

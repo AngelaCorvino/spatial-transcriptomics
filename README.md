@@ -14,8 +14,8 @@ The repository is intentionally kept simple:
 src/spatial_transcriptomics/       → Reusable analysis modules
 ├── config.py                       → Path and config management
 ├── data.py                         → Data loading and preprocessing
-├── analysis.py                     → Analysis utilities
-└── example.py                      → Example utility functions
+├── analysis.py                     → Analysis helpers
+└── plotting.py                     → Plotting helpers
 
 notebooks/                          → Analysis workflows
 └── visium_thymus_flash_analysis_pipeline.ipynb
@@ -37,7 +37,7 @@ make dev-install
 
 ## Workflow
 
-### Simple Notebook Workflow
+### Notebook Workflow
 
 ```python
 from spatial_transcriptomics.config import load_config

@@ -7,7 +7,7 @@ This folder contains Jupyter notebooks for analysis and exploration using the `s
 All analysis notebooks should import functions from the installed
 `spatial_transcriptomics` package instead of defining analysis logic inline.
 
-### Example Usage
+### Typical Usage
 
 ```python
 from spatial_transcriptomics.config import load_config
@@ -40,7 +40,7 @@ the package is installed in editable mode.
 
 ## Notebook Best Practices
 
-1. **Import from package**: Use `from spatial_transcriptomics import ...` instead of inline functions
+1. **Import from package**: Keep reusable logic in `src/spatial_transcriptomics/`
 2. **Use config for paths**: Never hardcode absolute paths; use `load_config()` or `get_data_path()`
 3. **Clear outputs before commit**: Remove execution results to keep notebook files small
 4. **Run checks before commit**: From the repo root, run `make check`
