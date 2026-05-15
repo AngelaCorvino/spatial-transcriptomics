@@ -2,11 +2,13 @@
 
 A modular Python package for spatial transcriptomics analysis with Jupyter notebook support.
 
-The repository contains:
+The repository is intentionally kept simple:
 - core code in `src/`
 - notebooks in `notebooks/`
 - tests in `tests/`
-- straightforward local commands through `make`
+- straightforward local commands through `make` (for example:
+  `make setup`, `make dev-install`, `make lab`, `make test`, `make lint`,
+  `make typecheck`, `make check`)
 
 ## Project Structure
 
@@ -23,16 +25,78 @@ notebooks/                          → Analysis workflows
 tests/                              → Unit tests
 ```
 
-## Installation
+## Choose Your Setup
+
+Pick one path based on your role. Do not run both.
+
+### End User Setup (run analysis, not developing package code)
+
+1. Clone and enter the repository:
+
+```bash
+git clone https://github.com/angelacorvino/spatial-transcriptomics.git
+cd spatial-transcriptomics
+```
+
+2. Install runtime dependencies and the package:
 
 ```bash
 make setup
 ```
 
-## Development
+3. Create your local machine-specific config:
+
+```bash
+cp local_config.yaml.template local_config.yaml
+# Edit with your local absolute paths
+```
+
+4. Start Jupyter Lab:
+
+```bash
+make lab
+```
+
+### Developer Setup (contributing code, tests, lint/type checks)
+
+1. Clone and enter the repository:
+
+```bash
+git clone https://github.com/angelacorvino/spatial-transcriptomics.git
+cd spatial-transcriptomics
+```
+
+2. Install runtime + development dependencies:
 
 ```bash
 make dev-install
+```
+
+`make dev-install` includes everything in `make setup` and also installs dev
+tools (`pytest`, `ruff`, `mypy`, `jupyterlab`, etc.), so developers should run
+`make dev-install` only.
+
+3. Create your local machine-specific config:
+
+```bash
+cp local_config.yaml.template local_config.yaml
+# Edit with your local absolute paths
+```
+
+4. Run checks during development:
+
+```bash
+make test
+make lint
+make typecheck
+# or all at once:
+make check
+```
+
+5. Start Jupyter Lab for notebook work:
+
+```bash
+make lab
 ```
 
 ## Workflow
@@ -47,19 +111,8 @@ from spatial_transcriptomics.analysis import compute_statistics
 config = load_config()
 ```
 
-Use this once per machine:
-
-```bash
-make dev-install
-```
-
-This creates a local `.venv/`, upgrades the Python packaging tools, and installs
-the package in editable mode.
-
-Core spatial analysis dependencies, including `scanpy` and `squidpy`, are
-installed as part of the package because the notebook workflow depends on them.
-
-Then start Jupyter from the repository root:
+Complete setup first using the appropriate path in **Choose Your Setup**, then
+start Jupyter from the repository root:
 
 ```bash
 make lab
@@ -67,15 +120,6 @@ make lab
 
 Because the package is installed in editable mode, notebook code can import
 `spatial_transcriptomics` directly without modifying `sys.path`.
-
-### Local Configuration
-
-Create `local_config.yaml` for absolute paths (gitignored):
-
-```bash
-cp local_config.yaml.template local_config.yaml
-# Edit with your local absolute paths
-```
 
 See [notebooks/README.md](notebooks/README.md) for detailed workflow documentation.
 
