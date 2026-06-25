@@ -29,6 +29,7 @@ echo "Job started at $(date)"
 echo "Repository root: $ROOT_DIR"
 echo "Temporary directory: $TMPDIR"
 
+module load miniconda/3
 eval "$(conda shell.bash hook)"
 conda activate "/labs/dirbas/$USER/.envs/spatial-transcriptomics"
 echo "Conda environment: $CONDA_PREFIX"
