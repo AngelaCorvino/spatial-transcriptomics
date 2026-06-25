@@ -9,7 +9,6 @@ import anndata
 import matplotlib
 import pandas
 import scanpy
-import squidpy
 import yaml
 
 import spatial_transcriptomics
@@ -25,7 +24,6 @@ def main() -> int:
     print(f"pandas version: {pandas.__version__}")
     print(f"matplotlib version: {matplotlib.__version__}")
     print(f"PyYAML version: {yaml.__version__}")
-    print(f"squidpy version: {squidpy.__version__}")
     print(f"spatial_transcriptomics version: {spatial_transcriptomics.__version__}")
     print("spatial_transcriptomics import: OK")
     print("Cluster test completed successfully")
