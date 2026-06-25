@@ -5,17 +5,20 @@ running the full pipeline.
 
 ```bash
 cd ~
-git clone git@github.com:YOUR_USERNAME/spatial-transcriptomics.git
+git clone -b cluster-test git@github.com:AngelaCorvino/spatial-transcriptomics.git
 cd spatial-transcriptomics
 
-mkdir -p /labs/dirbas/$USER/.envs
-mkdir -p /labs/dirbas/$USER/spatial_data
-mkdir -p /labs/dirbas/$USER/spatial_results
+mkdir -p /home/acorvino/.envs
+mkdir -p /oak/stanford/groups/dirbas/acorvino/spatial_data
+mkdir -p /oak/stanford/groups/dirbas/acorvino/spatial_results
 
-conda env create -p /labs/dirbas/$USER/.envs/spatial-transcriptomics -f environment.yml
-conda activate /labs/dirbas/$USER/.envs/spatial-transcriptomics
-pip install -e .
+module load miniconda/3
+eval "$(conda shell.bash hook)"
+conda create -p /home/acorvino/.envs/python-env python=3.11 pip -y
+conda activate /home/acorvino/.envs/python-env
 
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
 python scripts/test_import.py
 mkdir -p logs
 sbatch cluster/test_import.sh
@@ -23,9 +26,11 @@ squeue -u $USER
 ls logs
 ```
 
-Repository code should live under `/home/$USER/spatial-transcriptomics`.
-Conda environments, large data, and results should live under
-`/labs/dirbas/$USER/`.
+Repository code should live under `/home/acorvino/spatial-transcriptomics`.
+The conda environment should live under `/home/acorvino/.envs/python-env`.
+Large data and results should live on Oak:
+`/oak/stanford/groups/dirbas/acorvino/spatial_data` and
+`/oak/stanford/groups/dirbas/acorvino/spatial_results`.
 
 The SLURM smoke test creates per-job scratch space under
 `/tmp/$USER/$SLURM_JOB_ID` and uses that location for Matplotlib cache files.

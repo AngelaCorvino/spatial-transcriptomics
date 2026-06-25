@@ -13,8 +13,9 @@ echo "Start: $(date)"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+module load miniconda/3
 eval "$(conda shell.bash hook)"
-conda activate python-env
+conda activate /home/acorvino/.envs/python-env
 
 python -u scripts/05_cell_mapping.py --config configs/cluster.yaml
 

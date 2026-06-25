@@ -1,15 +1,16 @@
 # Cluster runtime settings for SCG SLURM execution.
-# Keep code in /home/$USER/spatial-transcriptomics.
-# Keep large data, results, conda environments, and caches under /labs/dirbas.
+# Keep code in /home/acorvino/spatial-transcriptomics.
+# Keep large data and results under Oak, not /home.
+# Use /tmp/$USER/$SLURM_JOB_ID only for per-job scratch.
 
 repo_root: .
-data_dir: /labs/dirbas/YOUR_SUNETID/spatial_data
-output_dir: /labs/dirbas/YOUR_SUNETID/spatial_results
-cache_dir: /labs/dirbas/YOUR_SUNETID/spatial_cache
+data_dir: /oak/stanford/groups/dirbas/acorvino/spatial_data
+output_dir: /oak/stanford/groups/dirbas/acorvino/spatial_results
+cache_dir: /tmp
 
 samplesheet: configs/samplesheet.csv
 
-conda_env: /labs/dirbas/YOUR_SUNETID/.envs/spatial-transcriptomics
+conda_env: /home/acorvino/.envs/python-env
 
 analysis:
   min_counts: 500
@@ -24,8 +25,11 @@ analysis:
   n_neighbors: 15
 
 paths:
-  qc_output: /labs/dirbas/YOUR_SUNETID/spatial_results/qc
-  preprocess_output: /labs/dirbas/YOUR_SUNETID/spatial_results/preprocess
-  integration_output: /labs/dirbas/YOUR_SUNETID/spatial_results/integration
-  spatial_output: /labs/dirbas/YOUR_SUNETID/spatial_results/spatial
-  cell_mapping_output: /labs/dirbas/YOUR_SUNETID/spatial_results/cell_mapping
+  data_dir: /oak/stanford/groups/dirbas/acorvino/spatial_data
+  output_dir: /oak/stanford/groups/dirbas/acorvino/spatial_results
+  cache_dir: /tmp
+  qc_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/qc
+  preprocess_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/preprocess
+  integration_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/integration
+  spatial_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/spatial
+  cell_mapping_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/cell_mapping
