@@ -49,6 +49,40 @@ def test_load_config_merges_local_yaml(
     assert config["analysis"] == {"resolution": 1.2}
 
 
+def test_load_config_accepts_explicit_config_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Explicit config files should be resolved from the repository root."""
+    repo_root = tmp_path / "repo"
+    module_path = repo_root / "src" / "spatial_transcriptomics" / "config.py"
+    module_path.parent.mkdir(parents=True)
+    module_path.touch()
+    config_dir = repo_root / "configs"
+    config_dir.mkdir()
+    (config_dir / "local.yaml").write_text("output_dir: outputs\n")
+    monkeypatch.setattr(config_module, "__file__", str(module_path))
+
+    config = config_module.load_config("configs/local.yaml")
+
+    assert config["output_dir"] == str(repo_root / "outputs")
+
+
+def test_resolve_config_path_uses_repo_root(tmp_path: Path) -> None:
+    """Relative config paths should resolve from repo_root."""
+    config = {"repo_root": str(tmp_path)}
+
+    result = config_module.resolve_config_path(config, "results/qc")
+
+    assert result == tmp_path / "results" / "qc"
+
+
+def test_get_config_section_rejects_non_dictionary() -> None:
+    """Nested sections should fail clearly when YAML has the wrong shape."""
+    with pytest.raises(TypeError, match="paths"):
+        config_module.get_config_section({"paths": "results"}, "paths")
+
+
 def test_get_output_path_creates_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

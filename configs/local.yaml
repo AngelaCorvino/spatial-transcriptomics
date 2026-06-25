@@ -1,0 +1,28 @@
+# Local runtime settings for reproducible analysis
+# Adapt paths in this file for your local machine.
+
+repo_root: .
+data_dir: data
+output_dir: results/local
+cache_dir: .cache
+
+samplesheet: configs/samplesheet.csv
+
+analysis:
+  min_counts: 500
+  max_counts: 20000
+  min_genes: 250
+  max_genes: 6000
+  max_pct_mt: 20.0
+  max_pct_rp: 30.0
+  target_sum: 10000.0
+  resolution: 1.0
+  n_pcs: 30
+  n_neighbors: 15
+
+paths:
+  qc_output: results/local/qc
+  preprocess_output: results/local/preprocess
+  integration_output: results/local/integration
+  spatial_output: results/local/spatial
+  cell_mapping_output: results/local/cell_mapping

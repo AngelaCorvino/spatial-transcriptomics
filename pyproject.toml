@@ -9,7 +9,7 @@ description = "Reusable Python toolkit for spatial transcriptomics analysis work
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-authors = [{name = "Angela Corvino", email = "acorvino@stanforf.edu"}]
+authors = [{name = "Angela Corvino", email = "acorvino@stanford.edu"}]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

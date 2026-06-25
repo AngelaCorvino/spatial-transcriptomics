@@ -1,0 +1,31 @@
+# Cluster runtime settings for SCG SLURM execution.
+# Keep code in /home/$USER/spatial-transcriptomics.
+# Keep large data, results, conda environments, and caches under /labs/dirbas.
+
+repo_root: .
+data_dir: /labs/dirbas/YOUR_SUNETID/spatial_data
+output_dir: /labs/dirbas/YOUR_SUNETID/spatial_results
+cache_dir: /labs/dirbas/YOUR_SUNETID/spatial_cache
+
+samplesheet: configs/samplesheet.csv
+
+conda_env: /labs/dirbas/YOUR_SUNETID/.envs/spatial-transcriptomics
+
+analysis:
+  min_counts: 500
+  max_counts: 20000
+  min_genes: 250
+  max_genes: 6000
+  max_pct_mt: 20.0
+  max_pct_rp: 30.0
+  target_sum: 10000.0
+  resolution: 1.0
+  n_pcs: 30
+  n_neighbors: 15
+
+paths:
+  qc_output: /labs/dirbas/YOUR_SUNETID/spatial_results/qc
+  preprocess_output: /labs/dirbas/YOUR_SUNETID/spatial_results/preprocess
+  integration_output: /labs/dirbas/YOUR_SUNETID/spatial_results/integration
+  spatial_output: /labs/dirbas/YOUR_SUNETID/spatial_results/spatial
+  cell_mapping_output: /labs/dirbas/YOUR_SUNETID/spatial_results/cell_mapping

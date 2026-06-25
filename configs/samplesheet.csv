@@ -1,0 +1,3 @@
+sample,condition,data_path
+sample1,flash,data/sample1
+sample2,conv,data/sample2

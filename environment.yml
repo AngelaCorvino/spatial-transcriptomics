@@ -1,0 +1,19 @@
+name: spatial-transcriptomics
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - setuptools
+  - scanpy
+  - anndata
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - pyyaml
+  - h5py
+  - python-igraph
+  - leidenalg
+  - ipykernel
+  - squidpy
