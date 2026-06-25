@@ -14,7 +14,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 eval "$(conda shell.bash hook)"
-conda activate spatial-transcriptomics
+conda activate python-env
 
 python -u scripts/02_preprocess.py --config configs/cluster.yaml
 

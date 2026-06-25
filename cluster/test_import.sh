@@ -31,7 +31,7 @@ echo "Temporary directory: $TMPDIR"
 
 module load miniconda/3
 eval "$(conda shell.bash hook)"
-conda activate "/labs/dirbas/$USER/.envs/spatial-transcriptomics"
+conda activate "/labs/dirbas/$USER/.envs/python-env"
 echo "Conda environment: $CONDA_PREFIX"
 
 python -u scripts/test_import.py
