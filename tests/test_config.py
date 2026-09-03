@@ -77,6 +77,22 @@ def test_resolve_config_path_uses_repo_root(tmp_path: Path) -> None:
     assert result == tmp_path / "results" / "qc"
 
 
+def test_resolve_config_path_expands_environment_variables(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Job-local paths may use environment variables such as TMPDIR."""
+    scratch = tmp_path / "job-scratch"
+    monkeypatch.setenv("SPATIAL_TEST_SCRATCH", str(scratch))
+
+    result = config_module.resolve_config_path(
+        {"repo_root": str(tmp_path)},
+        "${SPATIAL_TEST_SCRATCH}/FD1_HD",
+    )
+
+    assert result == scratch / "FD1_HD"
+
+
 def test_get_config_section_rejects_non_dictionary() -> None:
     """Nested sections should fail clearly when YAML has the wrong shape."""
     with pytest.raises(TypeError, match="paths"):

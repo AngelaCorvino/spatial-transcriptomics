@@ -8,6 +8,14 @@ cache_dir: .cache
 
 samplesheet: configs/samplesheet.csv
 
+# Local equivalent of the extracted Space Ranger HD staging layout.
+visium_hd:
+  sample_id: FD_1
+  staged_dir: data/FD1_HD
+  bin_size_um: 8
+  load_images: true
+  use_filtered_matrix: true
+
 analysis:
   min_counts: 500
   max_counts: 20000

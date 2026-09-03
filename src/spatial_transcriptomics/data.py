@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,131 @@ def load_data(data_path: str | Path) -> Any:
         )
 
     adata.var_names_make_unique()
+    return adata
+
+
+def load_visium_hd_bin(
+    data_path: str | Path,
+    bin_size_um: int = 8,
+    library_id: str | None = None,
+    load_images: bool = True,
+    use_filtered_matrix: bool = True,
+) -> Any:
+    """Load one extracted Visium HD bin size into an AnnData object.
+
+    ``data_path`` may be the staged Space Ranger root, its ``binned_outputs``
+    directory, or the selected ``square_XXXum`` directory itself. The function
+    attaches Space Ranger's bin metadata and full-resolution pixel coordinates
+    without applying any downstream QC filters or normalization.
+    """
+    if bin_size_um <= 0:
+        raise ValueError("bin_size_um must be a positive integer.")
+
+    path = Path(data_path).expanduser()
+    bin_name = f"square_{bin_size_um:03d}um"
+    candidates = [
+        path,
+        path / bin_name,
+        path / "binned_outputs" / bin_name,
+    ]
+    bin_path = next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.name == bin_name and candidate.is_dir()
+        ),
+        None,
+    )
+    if bin_path is None:
+        expected = path / "binned_outputs" / bin_name
+        raise FileNotFoundError(
+            f"Visium HD {bin_size_um} µm directory not found. Expected {expected}",
+        )
+
+    matrix_name = (
+        "filtered_feature_bc_matrix.h5"
+        if use_filtered_matrix
+        else "raw_feature_bc_matrix.h5"
+    )
+    matrix_path = bin_path / matrix_name
+    spatial_path = bin_path / "spatial"
+    positions_path = spatial_path / "tissue_positions.parquet"
+
+    if not matrix_path.is_file():
+        raise FileNotFoundError(f"Visium HD count matrix not found: {matrix_path}")
+    if not positions_path.is_file():
+        raise FileNotFoundError(
+            f"Visium HD tissue positions not found: {positions_path}",
+        )
+
+    sc = _load_scanpy()
+    adata = sc.read_10x_h5(matrix_path, gex_only=True)
+    adata.var_names_make_unique()
+    adata.obs_names = adata.obs_names.astype(str)
+
+    positions = pd.read_parquet(positions_path)
+    if "barcode" not in positions.columns:
+        raise ValueError(f"{positions_path} does not contain a 'barcode' column.")
+    if positions["barcode"].duplicated().any():
+        raise ValueError(f"{positions_path} contains duplicate barcodes.")
+
+    positions = positions.copy()
+    positions["barcode"] = positions["barcode"].astype(str)
+    positions = positions.set_index("barcode").reindex(adata.obs_names)
+
+    x_column = "pxl_col_in_fullres"
+    y_column = "pxl_row_in_fullres"
+    missing_columns = [
+        column for column in (x_column, y_column) if column not in positions.columns
+    ]
+    if missing_columns:
+        raise ValueError(
+            f"{positions_path} is missing coordinate columns {missing_columns}.",
+        )
+    if positions[[x_column, y_column]].isna().to_numpy().any():
+        raise ValueError("Some matrix barcodes do not have spatial coordinates.")
+
+    for column in positions.columns:
+        adata.obs[column] = positions[column].to_numpy()
+    adata.obs["bin_size_um"] = bin_size_um
+    adata.obsm["spatial"] = positions[[x_column, y_column]].to_numpy(dtype=float)
+
+    scalefactors_path = spatial_path / "scalefactors_json.json"
+    scalefactors: dict[str, object] = {}
+    if scalefactors_path.is_file():
+        with scalefactors_path.open() as handle:
+            scalefactors = json.load(handle)
+
+    images: dict[str, Any] = {}
+    if load_images:
+        try:
+            import matplotlib.image as mpimg
+        except ImportError as exc:
+            raise ImportError("matplotlib is required to load Visium images.") from exc
+
+        for image_key, image_name in {
+            "hires": "tissue_hires_image.png",
+            "lowres": "tissue_lowres_image.png",
+        }.items():
+            image_path = spatial_path / image_name
+            if image_path.is_file():
+                images[image_key] = mpimg.imread(image_path)
+
+    resolved_library_id = library_id or f"{path.name}_{bin_name}"
+    adata.uns.setdefault("spatial", {})[resolved_library_id] = {
+        "images": images,
+        "scalefactors": scalefactors,
+        "metadata": {
+            "bin_size_um": bin_size_um,
+            "matrix": matrix_name,
+            "source_path": str(bin_path.resolve()),
+        },
+    }
+    adata.uns["visium_hd"] = {
+        "bin_size_um": bin_size_um,
+        "library_id": resolved_library_id,
+        "source_path": str(bin_path.resolve()),
+    }
     return adata
 
 

@@ -20,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-dependencies = ["matplotlib", "numpy", "pandas", "PyYAML", "scanpy", "squidpy"]
+dependencies = ["matplotlib", "numpy", "pandas", "pyarrow", "PyYAML", "scanpy", "squidpy"]
 
 [project.urls]
 Homepage = "https://github.com/angelacorvino/spatial-transcriptomics"

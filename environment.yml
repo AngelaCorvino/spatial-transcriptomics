@@ -8,6 +8,7 @@ dependencies:
   - scanpy
   - anndata
   - pandas
+  - pyarrow
   - numpy
   - scipy
   - matplotlib

@@ -6,6 +6,7 @@ Avoids hardcoded absolute paths in notebooks and scripts.
 
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Mapping
 from pathlib import Path
@@ -16,8 +17,13 @@ except ImportError:
     yaml_module = None  # type: ignore[assignment]
 
 
-def _resolve_path(repo_root: Path, path: str) -> str:
-    path_obj = Path(path)
+def _expand_path(path: str | Path) -> Path:
+    """Expand environment variables and the user home marker in a path."""
+    return Path(os.path.expandvars(str(path))).expanduser()
+
+
+def _resolve_path(repo_root: Path, path: str | Path) -> str:
+    path_obj = _expand_path(path)
     if path_obj.is_absolute():
         return str(path_obj)
     return str((repo_root / path_obj).resolve())
@@ -25,7 +31,7 @@ def _resolve_path(repo_root: Path, path: str) -> str:
 
 def resolve_config_path(config: Mapping[str, object], raw_path: str | Path) -> Path:
     """Resolve a path from config relative to the repository root."""
-    path = Path(raw_path)
+    path = _expand_path(raw_path)
     if path.is_absolute():
         return path
 
@@ -33,7 +39,7 @@ def resolve_config_path(config: Mapping[str, object], raw_path: str | Path) -> P
     if not isinstance(repo_root, (str, Path)):
         raise TypeError("Configuration value 'repo_root' must be a string path.")
 
-    return (Path(repo_root) / path).resolve()
+    return (_expand_path(repo_root) / path).resolve()
 
 
 def get_config_section(
@@ -118,10 +124,18 @@ def load_config(config_path: str | Path | None = None) -> dict[str, object]:
     elif config_path is not None:
         raise FileNotFoundError(f"Config file not found: {config_file}")
 
+    configured_repo_root = default_config.get("repo_root", repo_root)
+    if not isinstance(configured_repo_root, (str, Path)):
+        raise TypeError("Configuration value 'repo_root' must be a string path.")
+    configured_repo_root_path = _expand_path(configured_repo_root)
+    if not configured_repo_root_path.is_absolute():
+        configured_repo_root_path = (repo_root / configured_repo_root_path).resolve()
+    default_config["repo_root"] = str(configured_repo_root_path)
+
     for key in ["data_dir", "output_dir", "cache_dir"]:
         value = default_config.get(key)
-        if isinstance(value, str):
-            default_config[key] = _resolve_path(repo_root, value)
+        if isinstance(value, (str, Path)):
+            default_config[key] = _resolve_path(configured_repo_root_path, value)
 
     return default_config
 
