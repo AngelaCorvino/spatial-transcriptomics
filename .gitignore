@@ -60,10 +60,11 @@ venv.bak/
 .ipynb_checkpoints/
 *.ipynb_checkpoints/
 
-# Large data files
+# Large data files and generated outputs
 *.h5
 *.h5ad
 *.csv.gz
+*.zarr
 *.zarr/
 *.parquet
 *.feather
@@ -71,10 +72,22 @@ data/
 results/
 .cache/
 
+# Cluster logs and temporary files
+*.out
+*.err
+*.log
+slurm-*.out
+logs/
+
 # Local configuration (with absolute paths)
 local_config.yaml
 local_config.toml
 local_config.json
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
 
 # Application cache
 .ruff_cache/

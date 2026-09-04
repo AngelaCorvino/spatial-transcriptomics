@@ -103,6 +103,10 @@ make lab
 
 ### Notebook Workflow
 
+Notebooks are for exploration, QC inspection, and plotting only. They should
+call reusable functions from `src/spatial_transcriptomics` and not duplicate
+analysis logic found in the `scripts/` pipeline.
+
 ```python
 from spatial_transcriptomics.config import load_config
 from spatial_transcriptomics.data import load_data, preprocess_data
@@ -117,6 +121,28 @@ start Jupyter from the repository root:
 ```bash
 make lab
 ```
+
+### Script-based Reproducible Workflow
+
+This repository supports both local and cluster execution without duplicating
+analysis code.
+
+- Local execution: `python -u scripts/01_qc.py --config configs/local.yaml`
+- Cluster execution: `sbatch cluster/slurm_01_qc.sh`
+
+Local and cluster configs differ in environment settings, output directories,
+and cluster-specific submission options, while the analysis code remains shared
+in `src/spatial_transcriptomics`.
+
+#### Local vs Cluster config
+
+- `configs/local.yaml` is for running on a laptop or workstation.
+- `configs/cluster.yaml` is for running inside an HPC SLURM job.
+- Both files define data paths, sample metadata, analysis thresholds, and
+  output directories.
+
+Because notebooks are exploratory, reproducible work should use the scripts in
+`scripts/` and the configs in `configs/`.
 
 Because the package is installed in editable mode, notebook code can import
 `spatial_transcriptomics` directly without modifying `sys.path`.

@@ -1,0 +1,45 @@
+# Cluster runtime settings for SCG SLURM execution.
+# Keep code in /home/acorvino/spatial-transcriptomics.
+# Keep large data and results under Oak, not /home.
+# Use /tmp/$USER/$SLURM_JOB_ID only for per-job scratch.
+
+repo_root: .
+data_dir: /oak/stanford/groups/dirbas/acorvino/spatial_data
+output_dir: /oak/stanford/groups/dirbas/acorvino/spatial_results
+cache_dir: /tmp
+
+samplesheet: configs/samplesheet.csv
+
+conda_env: /home/acorvino/.envs/python-env
+
+# FD1 Visium HD input for interactive QC on an SCG compute node. The source
+# archives remain on Oak; only square_008um is staged under the job's TMPDIR.
+visium_hd:
+  sample_id: FD_1
+  source_dir: /oak/stanford/groups/dirbas/Angela/thymus_9h/FD1
+  staged_dir: ${TMPDIR}/FD1_HD
+  bin_size_um: 8
+  load_images: true
+  use_filtered_matrix: true
+
+analysis:
+  min_counts: 500
+  max_counts: 20000
+  min_genes: 250
+  max_genes: 6000
+  max_pct_mt: 20.0
+  max_pct_rp: 30.0
+  target_sum: 10000.0
+  resolution: 1.0
+  n_pcs: 30
+  n_neighbors: 15
+
+paths:
+  data_dir: /oak/stanford/groups/dirbas/acorvino/spatial_data
+  output_dir: /oak/stanford/groups/dirbas/acorvino/spatial_results
+  cache_dir: /tmp
+  qc_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/qc
+  preprocess_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/preprocess
+  integration_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/integration
+  spatial_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/spatial
+  cell_mapping_output: /oak/stanford/groups/dirbas/acorvino/spatial_results/cell_mapping
