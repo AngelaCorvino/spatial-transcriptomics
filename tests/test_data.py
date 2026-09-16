@@ -1,5 +1,9 @@
 """Tests for data loading helpers."""
 
+import argparse
+import io
+import runpy
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +17,7 @@ from spatial_transcriptomics.data import (
     load_reference_genes,
     load_visium_hd_bin,
     read_de_csv,
+    stage_visium_hd_qc,
 )
 
 
@@ -124,3 +129,115 @@ def test_read_de_csv_drops_invalid_rows_and_duplicate_genes(tmp_path: Path) -> N
 
     assert list(result.index) == ["GeneA"]
     assert result.loc["GeneA", "stat"] == 1.2
+
+
+def test_hd_staging_extracts_only_requested_inputs(tmp_path: Path) -> None:
+    """Archive prefixes cannot escape scratch; other resolutions/images stay out."""
+    archive = tmp_path / "input.tar.gz"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name in [
+            "prefix/square_002um/filtered_feature_bc_matrix.h5",
+            "../../square_008um/filtered_feature_bc_matrix.h5",
+            "prefix/square_008um/spatial/tissue_hires_image.png",
+            "prefix/square_008um/spatial/tissue_positions.parquet",
+        ]:
+            info = tarfile.TarInfo(name)
+            info.size = 3
+            handle.addfile(info, io.BytesIO(b"abc"))
+    staged = stage_visium_hd_qc(archive, tmp_path / "scratch")
+    assert (staged / "filtered_feature_bc_matrix.h5").read_bytes() == b"abc"
+    assert (staged / "spatial/tissue_positions.parquet").read_bytes() == b"abc"
+    assert (
+        len([path for path in (tmp_path / "scratch").rglob("*") if path.is_file()]) == 2
+    )
+    with pytest.raises(FileNotFoundError, match="missing"):
+        stage_visium_hd_qc(archive, tmp_path / "missing", bin_size_um=16)
+
+
+def test_hd_batch_outputs_and_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise real sparse 10x loading, QC, plots, cache reuse, and invalidation."""
+    h5py = pytest.importorskip("h5py")
+    pytest.importorskip("scanpy")
+    pytest.importorskip("pyarrow")
+    from scipy import sparse
+
+    repo_root = Path(__file__).resolve().parents[1]
+    script = runpy.run_path(str(repo_root / "scripts" / "01_qc.py"))
+    run_qc = script["run_visium_hd_qc"]
+    refs = tmp_path / "reference_genomes"
+    refs.mkdir()
+    (refs / "mouse_mitochondrial_genes.txt").write_text("mt-Test\n")
+    (refs / "mouse_ribosomal_genes.txt").write_text("RplTest\n")
+    counts = np.array([[0, 0, 0], [2, 3, 5], [5, 10, 10], [10, 20, 20]])
+    barcodes = ["a", "b", "c", "d"]
+    fixture = tmp_path / "fixture" / "binned_outputs" / "square_008um"
+    (fixture / "spatial").mkdir(parents=True)
+    matrix = sparse.csc_matrix(counts.T)
+    with h5py.File(fixture / "filtered_feature_bc_matrix.h5", "w") as handle:
+        group = handle.create_group("matrix")
+        for name, values in {
+            "data": matrix.data,
+            "indices": matrix.indices,
+            "indptr": matrix.indptr,
+            "shape": matrix.shape,
+            "barcodes": np.array(barcodes, dtype="S"),
+        }.items():
+            group.create_dataset(name, data=values)
+        features = group.create_group("features")
+        for name, values in {
+            "id": ["ENSM1", "ENSM2", "ENSM3"],
+            "name": ["mt-Test", "RplTest", "GeneA"],
+            "feature_type": ["Gene Expression"] * 3,
+            "genome": ["mm10"] * 3,
+        }.items():
+            features.create_dataset(name, data=np.array(values, dtype="S"))
+    pd.DataFrame(
+        {
+            "barcode": barcodes[::-1],
+            "pxl_col_in_fullres": [40, 30, 20, 10],
+            "pxl_row_in_fullres": [4, 3, 2, 1],
+            "in_tissue": [1] * 4,
+        }
+    ).to_parquet(fixture / "spatial" / "tissue_positions.parquet")
+    source = tmp_path / "source"
+    for mouse in ["FD1", "FD2"]:
+        (source / mouse).mkdir(parents=True)
+        with tarfile.open(source / mouse / "binned_outputs.tar.gz", "w:gz") as handle:
+            handle.add(fixture, arcname="binned_outputs/square_008um")
+    output = tmp_path / "output"
+    scratch = tmp_path / "scratch"
+    args = argparse.Namespace(
+        config="synthetic",
+        mice=["FD1", "FD2"],
+        all_mice=False,
+        source_root=source,
+        scratch_dir=scratch,
+        output_dir=output,
+        force=False,
+        no_plots=False,
+    )
+    config = {"repo_root": str(tmp_path), "visium_hd": {"bin_size_um": 8}}
+    assert run_qc(config, args) == 0
+    qc = pd.read_parquet(output / "FD1" / "bin_qc.parquet")
+    np.testing.assert_allclose(qc["total_counts"], [0, 10, 25, 50])
+    np.testing.assert_allclose(qc["pct_counts_mt"], [0, 20, 20, 20])
+    np.testing.assert_allclose(qc["pct_counts_rp"], [0, 30, 40, 40])
+    assert qc["x"].tolist() == [10, 20, 30, 40]
+    comparison = output / "comparisons" / "FD1_FD2"
+    summary = pd.read_csv(comparison / "cross_mouse_qc_summary.csv")
+    assert summary["bins"].tolist() == [4, 4]
+    assert len(list(output.rglob("*.png"))) == 8
+    assert not list(scratch.iterdir())
+
+    def fail_load(*_args, **_kwargs):
+        raise AssertionError("Unexpected matrix reload")
+
+    monkeypatch.setitem(run_qc.__globals__, "load_visium_hd_bin", fail_load)
+    args.no_plots = True
+    assert run_qc(config, args) == 0
+    # Changing a reference list must invalidate the cache.
+    (refs / "mouse_mitochondrial_genes.txt").write_text("mt-Test\nmt-New\n")
+    with pytest.raises(AssertionError, match="Unexpected matrix reload"):
+        run_qc(config, args)

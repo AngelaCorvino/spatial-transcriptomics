@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tarfile
 from pathlib import Path
 from typing import Any
 
@@ -200,10 +202,12 @@ def calc_qc_metrics(
     adata: Any,
     mt_genes: list[str] | None = None,
     rp_genes: list[str] | None = None,
+    *,
+    percent_top: tuple[int, ...] | None = (50, 100, 200, 500),
 ) -> Any:
-    """Calculate standard QC metrics plus MT/RP percentages when provided."""
+    """Calculate QC metrics; use percent_top=None to skip unused gene rankings."""
     sc = _load_scanpy()
-    sc.pp.calculate_qc_metrics(adata, inplace=True)
+    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=percent_top)
 
     total_counts = np.asarray(adata.X.sum(axis=1)).ravel()
 
@@ -211,25 +215,81 @@ def calc_qc_metrics(
         mt_genes_in_data = [gene for gene in mt_genes if gene in adata.var_names]
         if mt_genes_in_data:
             mt_counts = np.asarray(adata[:, mt_genes_in_data].X.sum(axis=1)).ravel()
-            adata.obs["pct_counts_mt"] = np.divide(
-                mt_counts,
-                total_counts,
-                out=np.zeros_like(mt_counts, dtype=float),
-                where=total_counts > 0,
-            ) * 100
+            adata.obs["pct_counts_mt"] = (
+                np.divide(
+                    mt_counts,
+                    total_counts,
+                    out=np.zeros_like(mt_counts, dtype=float),
+                    where=total_counts > 0,
+                )
+                * 100
+            )
 
     if rp_genes:
         rp_genes_in_data = [gene for gene in rp_genes if gene in adata.var_names]
         if rp_genes_in_data:
             rp_counts = np.asarray(adata[:, rp_genes_in_data].X.sum(axis=1)).ravel()
-            adata.obs["pct_counts_rp"] = np.divide(
-                rp_counts,
-                total_counts,
-                out=np.zeros_like(rp_counts, dtype=float),
-                where=total_counts > 0,
-            ) * 100
+            adata.obs["pct_counts_rp"] = (
+                np.divide(
+                    rp_counts,
+                    total_counts,
+                    out=np.zeros_like(rp_counts, dtype=float),
+                    where=total_counts > 0,
+                )
+                * 100
+            )
 
     return adata
+
+
+def stage_visium_hd_qc(
+    archive_path: str | Path,
+    destination: str | Path,
+    bin_size_um: int = 8,
+    use_filtered_matrix: bool = True,
+) -> Path:
+    """Stream just the requested matrix and positions from a Space Ranger tarball.
+
+    Write only regular files to fixed destination paths, never archive paths.
+    The caller owns the temporary directory and its cleanup.
+    """
+    if bin_size_um <= 0:
+        raise ValueError("bin_size_um must be positive.")
+    bin_name = f"square_{bin_size_um:03d}um"
+    matrix = (
+        "filtered_feature_bc_matrix.h5"
+        if use_filtered_matrix
+        else "raw_feature_bc_matrix.h5"
+    )
+    bin_dir = Path(destination) / "binned_outputs" / bin_name
+    wanted = {
+        (bin_name, matrix): bin_dir / matrix,
+        (bin_name, "spatial", "tissue_positions.parquet"): bin_dir
+        / "spatial"
+        / "tissue_positions.parquet",
+    }
+    found = set()
+    with tarfile.open(archive_path, "r|gz") as archive:
+        for member in archive:
+            parts = Path(member.name).parts
+            for suffix, target in wanted.items():
+                if parts[-len(suffix) :] != suffix:
+                    continue
+                if suffix in found or not member.isfile():
+                    raise ValueError(f"Duplicate or non-regular input: {member.name}")
+                source = archive.extractfile(member)
+                if source is None:
+                    raise ValueError(f"Cannot read {member.name}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with source, target.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                found.add(suffix)
+            if len(found) == len(wanted):
+                break
+    missing = set(wanted) - found
+    if missing:
+        raise FileNotFoundError(f"Archive {archive_path} is missing: {sorted(missing)}")
+    return bin_dir
 
 
 def filter_by_quality(
