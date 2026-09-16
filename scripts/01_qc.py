@@ -150,8 +150,14 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
             "rp_genes": rp_genes,
         }
         metadata = {}
-        if metadata_path.exists():
-            metadata = json.loads(metadata_path.read_text())
+        if not args.force and metadata_path.exists():
+            try:
+                saved_metadata = json.loads(metadata_path.read_text())
+            except json.JSONDecodeError:
+                print(f"{mouse}: incomplete cache metadata; recomputing QC", flush=True)
+            else:
+                if isinstance(saved_metadata, dict):
+                    metadata = saved_metadata
         if not args.force and qc_path.exists() and metadata.get("input") == fingerprint:
             print(f"{mouse}: reusing cached QC metrics", flush=True)
             qc = pd.read_parquet(qc_path)
@@ -216,7 +222,9 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
             temporary_qc = sample_dir / "bin_qc.tmp.parquet"
             qc.to_parquet(temporary_qc)
             temporary_qc.replace(qc_path)
-            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+            temporary_metadata = sample_dir / "qc_metadata.tmp.json"
+            temporary_metadata.write_text(json.dumps(metadata, indent=2) + "\n")
+            temporary_metadata.replace(metadata_path)
 
         candidate_summary, _ = evaluate_hd_qc(qc)
         candidate_summary.insert(0, "mouse_id", mouse)

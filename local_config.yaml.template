@@ -4,6 +4,8 @@
 # This file is gitignored to prevent committing local absolute paths.
 # 
 # The config.load_config() function will merge these settings with defaults.
+# On SCG use configs/cluster.yaml instead; it defines the thymus project's
+# raw_data and processed_data directories on Oak.
 
 # Absolute path to data directory (optional - defaults to repo_root/data)
 # data_dir: /Users/your_username/path/to/large/data/directory

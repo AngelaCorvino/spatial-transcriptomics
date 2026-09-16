@@ -237,6 +237,18 @@ def test_hd_batch_outputs_and_cache(
     monkeypatch.setitem(run_qc.__globals__, "load_visium_hd_bin", fail_load)
     args.no_plots = True
     assert run_qc(config, args) == 0
+
+    # An interrupted marker write must trigger recomputation, including --force.
+    metadata_path = output / "FD1" / "qc_metadata.json"
+    saved_metadata = metadata_path.read_text()
+    metadata_path.write_text('{"input":')
+    for force in [False, True]:
+        args.force = force
+        with pytest.raises(AssertionError, match="Unexpected matrix reload"):
+            run_qc(config, args)
+    args.force = False
+    metadata_path.write_text(saved_metadata)
+
     # Changing a reference list must invalidate the cache.
     (refs / "mouse_mitochondrial_genes.txt").write_text("mt-Test\nmt-New\n")
     with pytest.raises(AssertionError, match="Unexpected matrix reload"):

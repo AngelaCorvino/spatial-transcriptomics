@@ -7,7 +7,7 @@ This folder contains Jupyter notebooks for analysis and exploration using the `s
 All analysis notebooks should import functions from the installed
 `spatial_transcriptomics` package instead of defining analysis logic inline.
 
-### Typical Usage
+### Generic local example
 
 ```python
 from spatial_transcriptomics.config import load_config
@@ -22,17 +22,28 @@ stats = compute_statistics(adata)
 
 ## Configuration
 
-- **No hardcoded paths**: All paths are managed via `local_config.yaml` or defaults
-- **Local paths only**: Copy `../local_config.yaml.template` to `../local_config.yaml` and add your absolute paths
-- **Gitignored**: `local_config.yaml` is gitignored—safe for local-only absolute paths
+- **Cluster notebook**: `visium_thymus_flash_analysis_pipeline.ipynb` defaults to
+  `configs/cluster.yaml`. Set `SPATIAL_CONFIG` before starting Jupyter to override it.
+- **Raw data**: `/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data/`, with each
+  mouse archive at `FD1/binned_outputs.tar.gz`, `FD2/binned_outputs.tar.gz`, etc.
+- **Processed data**: `/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/`.
+  The batch QC script saves reports under `qc/visium_hd_008um/`; the notebook
+  displays its QC tables and plots without automatically exporting them.
+- **Scratch**: `${TMPDIR}/FD1_HD` holds the staged FD1 inputs for the current job.
+- **Local use**: `configs/local.yaml` provides laptop settings. Calling
+  `load_config()` without an argument instead reads the gitignored
+  `local_config.yaml`, or repository defaults when that file is absent.
 
-### Setup
+Existing FD1–FD12 folders must be placed under `raw_data` on the cluster. Rerun
+the notebook setup cell after updating the configuration so the kernel uses the
+new paths. See [cluster setup](../cluster/README.md) for migration and batch jobs.
+
+### Local setup (from the repository root)
 
 ```bash
-cd ..
 make dev-install
-cp ../local_config.yaml.template ../local_config.yaml
-make lab
+cp local_config.yaml.template local_config.yaml
+SPATIAL_CONFIG=configs/local.yaml make lab
 ```
 
 Then open the notebook from Jupyter Lab. Imports should work directly because

@@ -29,13 +29,21 @@ echo "Job started at $(date)"
 echo "Repository root: $ROOT_DIR"
 echo "Temporary directory: $TMPDIR"
 
+# Module/Conda initialization may read unset interactive variables such as PS1.
+# Keep error checking enabled, but suspend nounset while running these hooks.
+set +u
 module load miniconda/3
-eval "$(conda shell.bash hook)"
+CONDA_BASH_HOOK="$(conda shell.bash hook)"
+eval "$CONDA_BASH_HOOK"
+unset CONDA_BASH_HOOK
 conda activate /home/acorvino/.envs/python-env
+set -u
 echo "Conda environment: $CONDA_PREFIX"
 
 python -u scripts/test_import.py
 
+set +u
 conda deactivate
+set -u
 
 echo "Job finished at $(date)"

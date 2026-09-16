@@ -5,12 +5,12 @@ running the full pipeline.
 
 ```bash
 cd ~
-git clone -b cluster-test git@github.com:AngelaCorvino/spatial-transcriptomics.git
+git clone -b main git@github.com:AngelaCorvino/spatial-transcriptomics.git
 cd spatial-transcriptomics
 
 mkdir -p /home/acorvino/.envs
-mkdir -p /oak/stanford/groups/dirbas/acorvino/spatial_data
-mkdir -p /oak/stanford/groups/dirbas/acorvino/spatial_results
+mkdir -p /oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data
+mkdir -p /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
 
 module load miniconda/3
 eval "$(conda shell.bash hook)"
@@ -29,8 +29,8 @@ ls logs
 Repository code should live under `/home/acorvino/spatial-transcriptomics`.
 The conda environment should live under `/home/acorvino/.envs/python-env`.
 Large data and results should live on Oak:
-`/oak/stanford/groups/dirbas/acorvino/spatial_data` and
-`/oak/stanford/groups/dirbas/acorvino/spatial_results`.
+`/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data` and
+`/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data`.
 
 The SLURM smoke test creates per-job scratch space under
 `/tmp/$USER/$SLURM_JOB_ID` and uses that location for Matplotlib cache files.
@@ -41,6 +41,36 @@ Do not run the full pipeline jobs until `cluster/test_import.sh` completes
 successfully.
 
 ## Visium HD notebook analysis as a batch job
+
+### Project storage layout
+
+The thymus project uses two folders inside
+`/oak/stanford/groups/dirbas/Angela/thymus_9h/`:
+
+```text
+thymus_9h/
+├── raw_data/
+│   ├── FD1/binned_outputs.tar.gz
+│   ├── FD2/binned_outputs.tar.gz
+│   └── ... FD12/
+└── processed_data/
+    └── qc/visium_hd_008um/
+```
+
+Create `raw_data` and `processed_data` on the cluster. Existing `FD1`–`FD12`
+sample folders must be moved into `raw_data` before using the updated config.
+Wait for jobs using the old input paths to finish before moving those folders.
+Changing this repository's config does not move cluster files or relocate
+previously generated results. New QC results go into `processed_data/qc/`.
+
+```bash
+cd /oak/stanford/groups/dirbas/Angela/thymus_9h
+mkdir -p raw_data processed_data
+```
+
+The scripts and active notebook both read these paths from `configs/cluster.yaml`.
+Rerun notebook setup after changing the config. The repository remains at
+`/home/acorvino/spatial-transcriptomics`; extracted job inputs remain in `TMPDIR`.
 
 The existing `scripts/01_qc.py --visium-hd` reproduces the 8 µm notebook QC
 and candidate-threshold comparison without a Jupyter session. It does not apply
@@ -67,6 +97,14 @@ override with `sbatch --mem=64G --time=04:00:00 ...` if needed. Submit from the
 repository root because the wrapper uses `SLURM_SUBMIT_DIR`. Follow the job with
 `squeue -u "$USER"` and `tail -f logs/qc-JOBID.out` (substitute its job ID).
 
+If a submitted QC job disappears from `squeue`, inspect both
+`logs/qc-JOBID.out` and `logs/qc-JOBID.err`; the job may have completed or failed.
+An `OD_Jupyt` entry is the separate interactive Jupyter session.
+The wrappers suspend Bash's unset-variable check during Module/Conda activation
+and deactivation because those hooks may reference an unset interactive variable
+such as `PS1`. Strict variable checking resumes before Python runs, and command
+failure checking remains enabled throughout setup and analysis.
+
 Alternatively, run in the terminal of an **existing Jupyter compute session**:
 
 ```bash
@@ -82,7 +120,7 @@ analysis on a login node.
 ### Saved outputs
 
 By default, outputs go to
-`/oak/stanford/groups/dirbas/acorvino/spatial_results/qc/visium_hd_008um/`.
+`/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/qc/visium_hd_008um/`.
 Override with `--output-dir PATH`.
 
 Each mouse folder contains:

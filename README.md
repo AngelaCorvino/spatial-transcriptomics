@@ -128,7 +128,7 @@ This repository supports both local and cluster execution without duplicating
 analysis code.
 
 - Local execution: `python -u scripts/01_qc.py --config configs/local.yaml`
-- Cluster execution: `sbatch cluster/slurm_01_qc.sh`
+- Cluster Visium HD QC: `sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD1 FD2`
 
 Local and cluster configs differ in environment settings, output directories,
 and cluster-specific submission options, while the analysis code remains shared
@@ -140,6 +140,34 @@ in `src/spatial_transcriptomics`.
 - `configs/cluster.yaml` is for running inside an HPC SLURM job.
 - Both files define data paths, sample metadata, analysis thresholds, and
   output directories.
+
+#### Thymus project storage on SCG
+
+`configs/cluster.yaml` supplies the shared paths for the scripts and the active
+Visium HD notebook:
+
+```text
+/oak/stanford/groups/dirbas/Angela/thymus_9h/
+├── raw_data/
+│   ├── FD1/binned_outputs.tar.gz
+│   ├── FD2/binned_outputs.tar.gz
+│   └── ... FD12/
+└── processed_data/
+    ├── qc/visium_hd_008um/
+    ├── preprocess/
+    ├── integration/
+    ├── spatial/
+    └── cell_mapping/
+```
+
+Place the existing FD1–FD12 sample folders under `raw_data` before using this
+configuration. QC reports are saved under `processed_data/qc/visium_hd_008um`;
+the other output directories are reserved for their corresponding pipeline steps.
+Extraction uses job-local `TMPDIR`. Repository code and the Python environment
+remain under `/home/acorvino/`.
+
+See [cluster/README.md](cluster/README.md) for folder setup, migration notes, and
+job submission commands. Create `logs/` in the repository before submitting jobs.
 
 Because notebooks are exploratory, reproducible work should use the scripts in
 `scripts/` and the configs in `configs/`.
