@@ -8,6 +8,7 @@ import pytest
 
 from spatial_transcriptomics.analysis import (
     compute_statistics,
+    decompose_hd_qc,
     evaluate_hd_qc,
     prepare_results,
 )
@@ -79,3 +80,60 @@ def test_hd_candidates_handle_zero_counts_and_no_retained_bins() -> None:
     assert np.isnan(summary.iloc[1]["median_counts_retained"])
     with pytest.raises(ValueError, match="reference genes"):
         evaluate_hd_qc(qc.drop(columns="pct_counts_mt"))
+
+
+def test_hd_failure_groups_partition_bins_and_reconcile_with_retention() -> None:
+    """Exercise all eight intersections, inclusive bounds, and UMI weighting."""
+    qc = pd.DataFrame(
+        {
+            "total_counts": [25, 24, 25, 19, 25, 24, 25, 19],
+            "n_genes_by_counts": [20, 20, 19, 19, 20, 20, 19, 19],
+            "pct_counts_mt": [20, 20, 20, 20, 20.1, 21, 21, 21],
+        }
+    )
+    original = qc.copy(deep=True)
+    result = decompose_hd_qc(qc)
+    moderate = result[result["candidate"] == "Moderate 8 µm"]
+    exclusive = moderate[moderate["group_type"] == "exclusive"]
+    assert exclusive["bins"].tolist() == [1] * 8
+    assert exclusive["umis"].tolist() == qc["total_counts"].tolist()
+    assert exclusive["bins_pct"].sum() == pytest.approx(100)
+    assert exclusive["umis_pct"].sum() == pytest.approx(100)
+    marginal = moderate[moderate["group_type"] == "marginal"].set_index("group")
+    assert marginal["bins"].tolist() == [4, 4, 4]
+    assert marginal["umis"].tolist() == [86, 88, 93]
+    candidates, _ = evaluate_hd_qc(qc)
+    for _, candidate in candidates.iterrows():
+        groups = result[
+            (result["candidate"] == candidate["candidate"])
+            & (result["group_type"] == "exclusive")
+        ]
+        passing = groups[groups["group"] == "passes_all"].iloc[0]
+        assert groups["bins"].sum() == len(qc)
+        assert groups["umis"].sum() == qc["total_counts"].sum()
+        assert passing["bins"] == candidate["bins_retained"]
+        assert passing["umis_pct"] == pytest.approx(
+            candidate["transcripts_retained_pct"]
+        )
+    pd.testing.assert_frame_equal(qc, original)
+
+
+def test_hd_failure_zero_umis_and_invalid_metrics() -> None:
+    qc = pd.DataFrame(
+        {
+            "total_counts": [0],
+            "n_genes_by_counts": [0],
+            "pct_counts_mt": [0],
+        }
+    )
+    result = decompose_hd_qc(qc)
+    assert result["umis_pct"].isna().all()
+    assert (result["umis"] == 0).all()
+    moderate = result[result["candidate"] == "Moderate 8 µm"].set_index("group")
+    assert moderate.loc["umi_and_genes_only", "bins"] == 1
+    with pytest.raises(ValueError, match="reference genes"):
+        decompose_hd_qc(qc.drop(columns="pct_counts_mt"))
+    with pytest.raises(ValueError, match="finite"):
+        decompose_hd_qc(qc.assign(pct_counts_mt=np.nan))
+    with pytest.raises(ValueError, match="bins"):
+        decompose_hd_qc(qc.iloc[:0])

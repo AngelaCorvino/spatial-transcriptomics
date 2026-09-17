@@ -235,6 +235,14 @@ def test_hd_batch_outputs_and_cache(
     comparison = output / "comparisons" / "FD1_FD2"
     summary = pd.read_csv(comparison / "cross_mouse_qc_summary.csv")
     assert summary["bins"].tolist() == [4, 4]
+    failures = pd.read_csv(comparison / "cross_mouse_failure_summary.csv")
+    exclusive = failures[failures["group_type"] == "exclusive"]
+    assert exclusive.groupby(["mouse_id", "candidate"])["bins"].sum().eq(4).all()
+    assert exclusive.groupby(["mouse_id", "candidate"])["umis"].sum().eq(85).all()
+    pd.testing.assert_frame_equal(
+        pd.read_csv(output / "FD1" / "failure_summary.csv"),
+        failures[failures["mouse_id"] == "FD1"].reset_index(drop=True),
+    )
     assert len(list(output.rglob("*.png"))) == 8
     assert not list(scratch.iterdir())
 
@@ -243,7 +251,13 @@ def test_hd_batch_outputs_and_cache(
 
     monkeypatch.setitem(run_qc.__globals__, "load_visium_hd_bin", fail_load)
     args.no_plots = True
+    (output / "FD1" / "failure_summary.csv").unlink()
     assert run_qc(config, args) == 0
+    assert (output / "FD1" / "failure_summary.csv").exists()
+    pd.testing.assert_frame_equal(
+        pd.read_csv(comparison / "cross_mouse_failure_summary.csv"),
+        failures,
+    )
 
     # Copying results to a new configured root must reuse the cached metrics.
     previous_output = output

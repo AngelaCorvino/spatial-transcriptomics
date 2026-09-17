@@ -75,6 +75,61 @@ def summarize_hd_qc(qc: pd.DataFrame) -> dict[str, int | float]:
     return result
 
 
+def decompose_hd_qc(qc: pd.DataFrame) -> pd.DataFrame:
+    """Count independent and overlapping failures without filtering input bins.
+
+    For each existing candidate, the eight ``exclusive`` groups partition the
+    input. The three ``marginal`` groups count all failures of one metric and
+    overlap with one another; they must not be added to the exclusive totals.
+    Percentages use all input bins or all input UMIs as their denominator.
+    """
+    evaluate_hd_qc(qc)  # Use the same required-column and finite-value checks.
+    counts = qc["total_counts"].to_numpy(dtype=float)
+    genes = qc["n_genes_by_counts"].to_numpy()
+    mt = qc["pct_counts_mt"].to_numpy()
+    total_umis = counts.sum()
+    labels = (
+        "passes_all",
+        "umi_only",
+        "genes_only",
+        "umi_and_genes_only",
+        "mt_only",
+        "umi_and_mt_only",
+        "genes_and_mt_only",
+        "all_three",
+    )
+    rows = []
+    for candidate, min_counts, min_genes, max_mt in HD_QC_CANDIDATES:
+        failures = (counts < min_counts, genes < min_genes, mt > max_mt)
+        codes = np.zeros(len(qc), dtype=np.uint8)
+        for i, mask in enumerate(failures):
+            codes[mask] |= 1 << i
+        groups = [("exclusive", name, codes == i) for i, name in enumerate(labels)]
+        groups += [
+            ("marginal", name, mask)
+            for name, mask in zip(("fails_umi", "fails_genes", "fails_mt"), failures)
+        ]
+        for group_type, group, mask in groups:
+            umis = float(counts[mask].sum())
+            rows.append(
+                {
+                    "candidate": candidate,
+                    "min_counts": min_counts,
+                    "min_genes": min_genes,
+                    "max_pct_mt": max_mt,
+                    "group_type": group_type,
+                    "group": group,
+                    "bins": int(mask.sum()),
+                    "bins_pct": 100 * mask.mean(),
+                    "umis": umis,
+                    "umis_pct": 100 * umis / total_umis if total_umis else np.nan,
+                    "input_bins": len(qc),
+                    "input_umis": float(total_umis),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def _load_scanpy() -> Any:
     """Import scanpy lazily so basic package imports stay lightweight."""
     try:

@@ -185,7 +185,14 @@ Each mouse folder contains:
 - `qc_metadata.json`: source archive identity, reference genes, and match counts.
 - `qc_summary.csv`: QC distributions and percentiles.
 - `candidate_summary.csv`: thresholds, retained bins/transcripts, and retained medians.
-- `qc_distributions.png`, `spatial_qc.png`, and `candidate_spatial_retention.png`.
+- `failure_summary.csv`: independent metric failures and their exclusive overlaps
+  for every candidate, including the no-additional-filter baseline.
+- `qc_distributions.png`: separate distributions of UMI counts, detected genes,
+  and mitochondrial percentage before additional filtering. Counts and genes
+  use `log10(value + 1)`; mitochondrial percentage stays on its original scale.
+- `spatial_qc.png`: the same three metrics mapped over all input bins. Counts
+  and genes use `log1p(value)`; mitochondrial percentage is not log-transformed.
+- `candidate_spatial_retention.png`: the existing hypothetical retention maps.
 
 Spatial maps draw filled HD bin footprints instead of tiny scatter markers to
 avoid a coarse rendering grid. Barcode rows/columns define the bin layout;
@@ -197,10 +204,36 @@ gray, and positions absent from the input remain empty.
 `comparisons/FD1_FD2/` (or the selected mouse IDs joined by underscores) contains:
 
 - `cross_mouse_qc_summary.csv` and `cross_mouse_candidate_summary.csv`.
+- `cross_mouse_failure_summary.csv`: all per-mouse failure tables combined.
 - `cross_mouse_retention.png` and `cross_mouse_spatial_*.png` (moderate threshold,
   up to four mice per page).
 - `run.json`: requested inputs and run status; `complete` is written only after
   every requested output succeeds. After a failed run, rerun the same command.
+
+### Independent failures and overlaps
+
+`failure_summary.csv` uses the existing candidate rules, with inclusive passing
+boundaries. A bin fails UMI or gene QC when its value is below the minimum; it
+fails MT QC when its percentage exceeds the maximum. These are diagnostic
+classifications, not applied filters. With the current config, the input is
+Space Ranger's filtered 8 µm matrix, before additional analysis filtering.
+
+The `group_type` column distinguishes two kinds of rows:
+
+- `exclusive`: `passes_all`, `umi_only`, `genes_only`, `mt_only`,
+  `umi_and_genes_only`, `umi_and_mt_only`, `genes_and_mt_only`, and `all_three`.
+  Each bin belongs to exactly one of these eight groups for each candidate.
+- `marginal`: `fails_umi`, `fails_genes`, and `fails_mt`, each including bins
+  that also fail other criteria. These rows overlap and must not be summed.
+
+Each row records bins and UMIs, their percentages of the full input, the input
+totals, and the candidate thresholds. Exclusive rows sum to the input totals;
+`passes_all` reconciles with `candidate_summary.csv`. UMI percentages are blank
+when the input has zero total UMIs. Interpret each candidate separately.
+
+After copying the updated code to SCG, rerun the all-mouse command above without
+`--force`. Valid cached per-bin tables are reused to produce the new summaries
+and three-metric maps. This update does not require recomputing count metrics.
 
 ### Runtime and reuse
 

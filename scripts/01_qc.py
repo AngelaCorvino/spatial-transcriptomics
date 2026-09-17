@@ -14,7 +14,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from spatial_transcriptomics.analysis import evaluate_hd_qc, summarize_hd_qc
+from spatial_transcriptomics.analysis import (
+    decompose_hd_qc,
+    evaluate_hd_qc,
+    summarize_hd_qc,
+)
 from spatial_transcriptomics.config import (
     get_config_path,
     get_config_section,
@@ -131,6 +135,7 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
     started = time.monotonic()
     summaries = []
     candidates = []
+    failures = []
     qc_paths = {}
     for mouse, archive in archives.items():
         sample_start = time.monotonic()
@@ -229,6 +234,10 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         candidate_summary, _ = evaluate_hd_qc(qc)
         candidate_summary.insert(0, "mouse_id", mouse)
         candidate_summary.to_csv(sample_dir / "candidate_summary.csv", index=False)
+        failure_summary = decompose_hd_qc(qc)
+        failure_summary.insert(0, "mouse_id", mouse)
+        failure_summary.to_csv(sample_dir / "failure_summary.csv", index=False)
+        failures.append(failure_summary)
         metric_columns = [column for column in qc if column not in {"x", "y"}]
         qc[metric_columns].describe(
             percentiles=[0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99],
@@ -257,6 +266,9 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         comparison_dir / "cross_mouse_qc_summary.csv", index=False
     )
     combined.to_csv(comparison_dir / "cross_mouse_candidate_summary.csv", index=False)
+    pd.concat(failures, ignore_index=True).to_csv(
+        comparison_dir / "cross_mouse_failure_summary.csv", index=False
+    )
     if not args.no_plots:
         plot_hd_qc_comparison(combined, qc_paths, comparison_dir)
     run_record.update(status="complete", elapsed_seconds=time.monotonic() - started)

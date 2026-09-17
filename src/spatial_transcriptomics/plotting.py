@@ -99,8 +99,8 @@ def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None):
 
 def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
     """Save the notebook's distributions, spatial QC, and candidate footprints."""
-    columns = ["total_counts", "n_genes_by_counts", "pct_counts_mt", "pct_counts_rp"]
-    columns = [column for column in columns if column in qc]
+    columns = ["total_counts", "n_genes_by_counts", "pct_counts_mt"]
+    evaluate_hd_qc(qc)
     fig, axes = plt.subplots(
         1,
         len(columns),
@@ -119,14 +119,17 @@ def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
     fig.suptitle(f"{mouse_id}: QC distributions (no additional filtering)")
     _save_qc_figure(fig, output_dir / "qc_distributions.png")
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), constrained_layout=True)
-    for ax, column in zip(axes, columns[:2]):
-        points = plot_hd_spatial(
-            ax, qc, np.ones(len(qc), dtype=bool), np.log1p(qc[column].to_numpy())
-        )
-        ax.set_title(f"log1p({column})")
+    fig, axes = plt.subplots(1, 3, figsize=(21, 6), constrained_layout=True)
+    for ax, column in zip(axes, columns):
+        values = qc[column].to_numpy()
+        label = "Mitochondrial counts (%)"
+        if column != "pct_counts_mt":
+            values = np.log1p(values)
+            label = f"log1p({column})"
+        points = plot_hd_spatial(ax, qc, np.ones(len(qc), dtype=bool), values)
+        ax.set_title(label)
         fig.colorbar(points, ax=ax, shrink=0.7)
-    fig.suptitle(f"{mouse_id}: spatial QC at 8 µm")
+    fig.suptitle(f"{mouse_id}: spatial QC at 8 µm (no additional filtering)")
     _save_qc_figure(fig, output_dir / "spatial_qc.png")
 
     _, masks = evaluate_hd_qc(qc)

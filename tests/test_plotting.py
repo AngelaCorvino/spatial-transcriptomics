@@ -11,6 +11,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import QuadMesh
 
 from spatial_transcriptomics.plotting import (
+    plot_hd_qc,
     plot_hd_spatial,
     pretty_title,
     stacked_bar,
@@ -145,6 +146,44 @@ def test_hd_spatial_empty_selection_keeps_shared_color_limits() -> None:
         assert mesh.get_clim() == (10, 90)
     finally:
         plt.close(fig)
+
+
+def test_hd_qc_includes_unfiltered_mt_on_its_percentage_scale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The MT spatial panel must retain percentages, including high-MT bins."""
+    qc = _hd_plot_frame().assign(
+        n_genes_by_counts=[70, 9, 80, 25, 40],
+        pct_counts_mt=[0, 10, 20, 50, 100],
+    )
+    original = qc.copy(deep=True)
+    saved = []
+
+    def inspect_figure(fig, path):
+        saved.append(path.name)
+        if path.name == "qc_distributions.png":
+            assert len(fig.axes) == 3
+            assert fig.axes[2].get_xlabel() == "pct_counts_mt"
+        if path.name == "spatial_qc.png":
+            ax = next(
+                ax for ax in fig.axes if ax.get_title() == "Mitochondrial counts (%)"
+            )
+            mesh = ax.collections[-1]
+            assert mesh.get_clim() == (0, 100)
+            np.testing.assert_array_equal(
+                np.sort(mesh.get_array().compressed()),
+                [0, 10, 20, 50, 100],
+            )
+        plt.close(fig)
+
+    monkeypatch.setattr(
+        "spatial_transcriptomics.plotting._save_qc_figure",
+        inspect_figure,
+    )
+    plot_hd_qc(qc, "FD1", tmp_path)
+    assert len(saved) == 3
+    pd.testing.assert_frame_equal(qc, original)
 
 
 @pytest.mark.parametrize(
