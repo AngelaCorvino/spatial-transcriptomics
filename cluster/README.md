@@ -86,19 +86,28 @@ destination **on the cluster**. Wait for jobs writing either results directory
 to finish first. Keep the original directory until the copy has been verified.
 
 ```bash
-previous_results=/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
-current_results=/labs/dirbas/acorvino/thymus_9h/processed_data
-mkdir -p "$current_results"
-rsync -rltp --chmod=Dg+s --ignore-existing --partial --progress \
-  "$previous_results/" "$current_results/"
+mkdir -p /labs/dirbas/acorvino/thymus_9h/processed_data &&
+rsync -rltp --chmod=Dg+s --ignore-existing --partial-dir=.rsync-partial --progress \
+  /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/ \
+  /labs/dirbas/acorvino/thymus_9h/processed_data/
 ```
+
+Use the full paths shown here, including in a new terminal session. A command
+such as `"$previous_results/"` becomes `/` when the variable is unset or empty,
+which could scan unrelated directories. If output mentions paths outside the
+two project directories above, stop with Ctrl+C and inspect the command before
+continuing.
 
 The trailing slashes copy the **contents** of `processed_data`, preserving
 `qc/visium_hd_008um/FD1/`, etc. Existing destination files are left in place;
-the source is retained. Check file contents with a checksum dry run:
+the source is retained. Interrupted transfers keep incomplete files in
+`.rsync-partial` for resuming, rather than publishing incomplete QC files.
+Check file contents with a checksum dry run:
 
 ```bash
-rsync -rcn --itemize-changes "$previous_results/" "$current_results/"
+rsync -rcn --itemize-changes \
+  /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/ \
+  /labs/dirbas/acorvino/thymus_9h/processed_data/
 ```
 
 This check should exit successfully and print no file differences. If it lists
