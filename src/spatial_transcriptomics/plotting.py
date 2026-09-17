@@ -11,6 +11,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.colors import ListedColormap
 
 from spatial_transcriptomics.analysis import evaluate_hd_qc
 
@@ -21,26 +22,76 @@ def _save_qc_figure(fig, outfile: Path) -> None:
     plt.close(fig)
 
 
-def _qc_spatial_axis(ax, qc: pd.DataFrame, mask, values=None):
-    """Draw all bins, with excluded bins gray and image-style orientation."""
-    ax.scatter(
-        qc.loc[~mask, "x"],
-        qc.loc[~mask, "y"],
-        c="lightgray",
-        s=0.3,
-        linewidths=0,
-        rasterized=True,
+def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None):
+    """Draw filled HD bin footprints without scatter-marker moire.
+
+    ``qc`` contains image coordinates ``x``/``y`` and HD barcodes as its index.
+    Barcode rows/columns define adjacent square bins; an affine fit preserves
+    their image orientation. Reject layouts deviating by more than 0.1 bin.
+    Missing bins stay transparent and excluded input bins are gray. Values and
+    masks follow dataframe order and are never modified, smoothed or aggregated.
+    Color limits use all supplied values, keeping candidate panels comparable.
+    """
+    positions = qc.index.to_series().str.extract(r"^s_\d+um_(\d+)_(\d+)-\d+$")
+    if qc.empty or positions.isna().any().any():
+        raise ValueError("Spatial HD plots require row/column Visium HD barcodes.")
+    if positions.duplicated().any():
+        raise ValueError("Spatial HD plots require unique bin positions.")
+    row, col = positions.to_numpy(dtype=int).T
+    row, col = row - row.min(), col - col.min()
+    design = np.column_stack([col, row, np.ones(len(qc))])
+    centers = qc[["x", "y"]].to_numpy(dtype=float)
+    if not np.isfinite(centers).all():
+        raise ValueError("Spatial HD plots require finite image coordinates.")
+    transform, _, rank, _ = np.linalg.lstsq(design, centers, rcond=None)
+    pitch = np.linalg.norm(transform[:2], axis=1).min()
+    fitted = np.einsum("ij,jk->ik", design, transform)
+    error = np.linalg.norm(fitted - centers, axis=1).max()
+    if (
+        rank < 3
+        or pitch <= 0
+        or abs(np.linalg.det(transform[:2])) < 1e-6 * pitch**2
+        or error > 0.1 * pitch
+    ):
+        raise ValueError("Image coordinates do not match an affine HD bin grid.")
+
+    mask = np.asarray(mask, dtype=bool)
+    colors = np.ones(len(qc)) if values is None else np.asarray(values, dtype=float)
+    if mask.shape != (len(qc),) or colors.shape != (len(qc),):
+        raise ValueError("Spatial values and mask must have one entry per HD bin.")
+    if not np.isfinite(colors).all():
+        raise ValueError("Spatial HD plots require finite color values.")
+    shape = (int(row.max()) + 1, int(col.max()) + 1)
+    col_edges, row_edges = np.meshgrid(
+        np.arange(shape[1] + 1) - 0.5, np.arange(shape[0] + 1) - 0.5
     )
-    points = ax.scatter(
-        qc.loc[mask, "x"],
-        qc.loc[mask, "y"],
-        c="#2166ac" if values is None else values[mask],
-        **({} if values is None else {"cmap": "viridis"}),
-        s=0.3,
-        linewidths=0,
-        rasterized=True,
+    x = col_edges * transform[0, 0] + row_edges * transform[1, 0] + transform[2, 0]
+    y = col_edges * transform[0, 1] + row_edges * transform[1, 1] + transform[2, 1]
+    mesh_options = dict(
+        shading="flat", edgecolors="none", antialiased=False, rasterized=True
     )
-    ax.invert_yaxis()
+    background = np.full(shape, np.nan)
+    background[row[~mask], col[~mask]] = 1
+    ax.pcolormesh(
+        x,
+        y,
+        np.ma.masked_invalid(background),
+        cmap=ListedColormap(["lightgray"]),
+        **mesh_options,
+    )
+    grid = np.full(shape, np.nan)
+    grid[row[mask], col[mask]] = colors[mask]
+    points = ax.pcolormesh(
+        x,
+        y,
+        np.ma.masked_invalid(grid),
+        cmap=ListedColormap(["#2166ac"]) if values is None else "viridis",
+        vmin=float(colors.min()),
+        vmax=float(colors.max()),
+        **mesh_options,
+    )
+    if not ax.yaxis_inverted():
+        ax.invert_yaxis()
     ax.set_aspect("equal")
     ax.set_axis_off()
     return points
@@ -70,7 +121,7 @@ def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), constrained_layout=True)
     for ax, column in zip(axes, columns[:2]):
-        points = _qc_spatial_axis(
+        points = plot_hd_spatial(
             ax, qc, np.ones(len(qc), dtype=bool), np.log1p(qc[column].to_numpy())
         )
         ax.set_title(f"log1p({column})")
@@ -81,7 +132,7 @@ def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
     _, masks = evaluate_hd_qc(qc)
     fig, axes = plt.subplots(2, 2, figsize=(14, 12), constrained_layout=True)
     for ax, (label, mask) in zip(axes.flat, masks.items()):
-        points = _qc_spatial_axis(ax, qc, mask, np.log1p(qc["total_counts"].to_numpy()))
+        points = plot_hd_spatial(ax, qc, mask, np.log1p(qc["total_counts"].to_numpy()))
         fig.colorbar(points, ax=ax, shrink=0.7, label="log1p(total_counts)")
         ax.set_title(f"{label}\n{mask.sum():,} bins ({100 * mask.mean():.1f}%)")
     fig.suptitle(f"{mouse_id}: candidate retention at 8 µm")
@@ -132,7 +183,7 @@ def plot_hd_qc_comparison(
             qc = pd.read_parquet(path)
             _, masks = evaluate_hd_qc(qc)
             mask = masks["Moderate 8 µm"]
-            _qc_spatial_axis(ax, qc, mask)
+            plot_hd_spatial(ax, qc, mask)
             ax.set_title(f"{mouse_id}: {mask.sum():,} bins ({100 * mask.mean():.1f}%)")
         for ax in list(axes.flat)[len(page) :]:
             ax.set_visible(False)

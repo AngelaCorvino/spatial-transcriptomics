@@ -3,6 +3,7 @@
 import argparse
 import io
 import runpy
+import shutil
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -157,7 +158,7 @@ def test_hd_staging_extracts_only_requested_inputs(tmp_path: Path) -> None:
 def test_hd_batch_outputs_and_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Exercise real sparse 10x loading, QC, plots, cache reuse, and invalidation."""
+    """Exercise sparse loading, QC, plots, cache relocation, and invalidation."""
     h5py = pytest.importorskip("h5py")
     pytest.importorskip("scanpy")
     pytest.importorskip("pyarrow")
@@ -171,7 +172,12 @@ def test_hd_batch_outputs_and_cache(
     (refs / "mouse_mitochondrial_genes.txt").write_text("mt-Test\n")
     (refs / "mouse_ribosomal_genes.txt").write_text("RplTest\n")
     counts = np.array([[0, 0, 0], [2, 3, 5], [5, 10, 10], [10, 20, 20]])
-    barcodes = ["a", "b", "c", "d"]
+    barcodes = [
+        "s_008um_00000_00000-1",
+        "s_008um_00000_00001-1",
+        "s_008um_00001_00000-1",
+        "s_008um_00001_00001-1",
+    ]
     fixture = tmp_path / "fixture" / "binned_outputs" / "square_008um"
     (fixture / "spatial").mkdir(parents=True)
     matrix = sparse.csc_matrix(counts.T)
@@ -196,8 +202,8 @@ def test_hd_batch_outputs_and_cache(
     pd.DataFrame(
         {
             "barcode": barcodes[::-1],
-            "pxl_col_in_fullres": [40, 30, 20, 10],
-            "pxl_row_in_fullres": [4, 3, 2, 1],
+            "pxl_col_in_fullres": [20, 10, 20, 10],
+            "pxl_row_in_fullres": [20, 20, 10, 10],
             "in_tissue": [1] * 4,
         }
     ).to_parquet(fixture / "spatial" / "tissue_positions.parquet")
@@ -224,7 +230,8 @@ def test_hd_batch_outputs_and_cache(
     np.testing.assert_allclose(qc["total_counts"], [0, 10, 25, 50])
     np.testing.assert_allclose(qc["pct_counts_mt"], [0, 20, 20, 20])
     np.testing.assert_allclose(qc["pct_counts_rp"], [0, 30, 40, 40])
-    assert qc["x"].tolist() == [10, 20, 30, 40]
+    assert qc["x"].tolist() == [10, 20, 10, 20]
+    assert qc["y"].tolist() == [10, 10, 20, 20]
     comparison = output / "comparisons" / "FD1_FD2"
     summary = pd.read_csv(comparison / "cross_mouse_qc_summary.csv")
     assert summary["bins"].tolist() == [4, 4]
@@ -237,6 +244,23 @@ def test_hd_batch_outputs_and_cache(
     monkeypatch.setitem(run_qc.__globals__, "load_visium_hd_bin", fail_load)
     args.no_plots = True
     assert run_qc(config, args) == 0
+
+    # Copying results to a new configured root must reuse the cached metrics.
+    previous_output = output
+    output = tmp_path / "new_results" / "qc" / "visium_hd_008um"
+    shutil.copytree(previous_output, output)
+    cached_table = (output / "FD1" / "bin_qc.parquet").read_bytes()
+    config["paths"] = {"qc_output": str(output.parent)}
+    config["visium_hd"] = {"bin_size_um": 8, "source_dir": str(source / "FD1")}
+    args.source_root = None
+    args.output_dir = None
+    assert run_qc(config, args) == 0
+    assert (output / "FD1" / "bin_qc.parquet").read_bytes() == cached_table
+    pd.testing.assert_frame_equal(
+        pd.read_csv(output / "comparisons" / "FD1_FD2" / "cross_mouse_qc_summary.csv"),
+        summary,
+    )
+    assert (previous_output / "FD1" / "bin_qc.parquet").read_bytes() == cached_table
 
     # An interrupted marker write must trigger recomputation, including --force.
     metadata_path = output / "FD1" / "qc_metadata.json"

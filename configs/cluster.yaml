@@ -1,11 +1,12 @@
 # Cluster runtime settings for SCG SLURM execution.
 # Keep code in /home/acorvino/spatial-transcriptomics.
-# Keep thymus inputs in raw_data and outputs in processed_data on Oak.
+# Raw inputs use the group's /oak allocation; outputs use SCG /labs storage.
+# Both storage allocations are hosted on Oak.
 # Use /tmp/$USER/$SLURM_JOB_ID only for per-job scratch.
 
 repo_root: .
 data_dir: /oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data
-output_dir: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
+output_dir: /labs/dirbas/acorvino/thymus_9h/processed_data
 cache_dir: /tmp
 
 samplesheet: configs/samplesheet.csv
@@ -36,10 +37,10 @@ analysis:
 
 paths:
   data_dir: /oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data
-  output_dir: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
+  output_dir: /labs/dirbas/acorvino/thymus_9h/processed_data
   cache_dir: /tmp
-  qc_output: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/qc
-  preprocess_output: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/preprocess
-  integration_output: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/integration
-  spatial_output: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/spatial
-  cell_mapping_output: /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/cell_mapping
+  qc_output: /labs/dirbas/acorvino/thymus_9h/processed_data/qc
+  preprocess_output: /labs/dirbas/acorvino/thymus_9h/processed_data/preprocess
+  integration_output: /labs/dirbas/acorvino/thymus_9h/processed_data/integration
+  spatial_output: /labs/dirbas/acorvino/thymus_9h/processed_data/spatial
+  cell_mapping_output: /labs/dirbas/acorvino/thymus_9h/processed_data/cell_mapping

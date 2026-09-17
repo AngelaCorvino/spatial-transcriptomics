@@ -5,7 +5,8 @@
 # 
 # The config.load_config() function will merge these settings with defaults.
 # On SCG use configs/cluster.yaml instead; it defines the thymus project's
-# raw_data and processed_data directories on Oak.
+# raw_data under /oak/stanford/groups/dirbas/Angela/thymus_9h/ and
+# processed_data under /labs/dirbas/acorvino/thymus_9h/ (both hosted on Oak).
 
 # Absolute path to data directory (optional - defaults to repo_root/data)
 # data_dir: /Users/your_username/path/to/large/data/directory

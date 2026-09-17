@@ -10,7 +10,7 @@ cd spatial-transcriptomics
 
 mkdir -p /home/acorvino/.envs
 mkdir -p /oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data
-mkdir -p /oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
+mkdir -p /labs/dirbas/acorvino/thymus_9h/processed_data
 
 module load miniconda/3
 eval "$(conda shell.bash hook)"
@@ -28,14 +28,20 @@ ls logs
 
 Repository code should live under `/home/acorvino/spatial-transcriptomics`.
 The conda environment should live under `/home/acorvino/.envs/python-env`.
-Large data and results should live on Oak:
-`/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data` and
-`/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data`.
+Raw data live at `/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data`;
+processed results go to `/labs/dirbas/acorvino/thymus_9h/processed_data`.
+Both are hosted on Oak, but `/labs` is SCG-managed storage and the group's
+`/oak/stanford/groups` directory belongs to a separate allocation. See the
+[Stanford Oak FAQ](https://docs.oak.stanford.edu/faq/). Run `checkquota` on SCG
+to check available capacity; this configuration change does not increase quota.
 
 The SLURM smoke test creates per-job scratch space under
 `/tmp/$USER/$SLURM_JOB_ID` and uses that location for Matplotlib cache files.
 The `logs/` directory is created before submission because SLURM opens output
-and error files before the job script starts.
+and error files before the job script starts. Submit all wrappers from the
+repository root: they use `SLURM_SUBMIT_DIR` to locate code and configuration
+even when SLURM runs a temporary copy of the wrapper. Logs remain in the
+repository's `logs/` directory; analysis outputs use the configured results root.
 
 Do not run the full pipeline jobs until `cluster/test_import.sh` completes
 successfully.
@@ -44,33 +50,72 @@ successfully.
 
 ### Project storage layout
 
-The thymus project uses two folders inside
-`/oak/stanford/groups/dirbas/Angela/thymus_9h/`:
+The raw archives and processed results use separate roots:
 
 ```text
-thymus_9h/
-├── raw_data/
-│   ├── FD1/binned_outputs.tar.gz
-│   ├── FD2/binned_outputs.tar.gz
-│   └── ... FD12/
-└── processed_data/
-    └── qc/visium_hd_008um/
+/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data/
+├── FD1/binned_outputs.tar.gz
+├── FD2/binned_outputs.tar.gz
+└── ... FD12/
+
+/labs/dirbas/acorvino/thymus_9h/processed_data/
+├── qc/visium_hd_008um/
+├── preprocess/
+├── integration/
+├── spatial/
+└── cell_mapping/
 ```
 
-Create `raw_data` and `processed_data` on the cluster. Existing `FD1`–`FD12`
-sample folders must be moved into `raw_data` before using the updated config.
-Wait for jobs using the old input paths to finish before moving those folders.
-Changing this repository's config does not move cluster files or relocate
-previously generated results. New QC results go into `processed_data/qc/`.
+Raw archives stay in their existing `raw_data/FD1`–`raw_data/FD12` folders.
+Confirm they are present before submitting a job. Changing this repository's
+config does not move cluster files or relocate previously generated results.
 
 ```bash
-cd /oak/stanford/groups/dirbas/Angela/thymus_9h
-mkdir -p raw_data processed_data
+ls -l /oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data/FD{1,2}/binned_outputs.tar.gz
+mkdir -p /labs/dirbas/acorvino/thymus_9h/processed_data
 ```
 
 The scripts and active notebook both read these paths from `configs/cluster.yaml`.
 Rerun notebook setup after changing the config. The repository remains at
 `/home/acorvino/spatial-transcriptomics`; extracted job inputs remain in `TMPDIR`.
+
+### Copy existing results once
+
+After updating the repository, copy previously generated results to the new
+destination **on the cluster**. Wait for jobs writing either results directory
+to finish first. Keep the original directory until the copy has been verified.
+
+```bash
+previous_results=/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data
+current_results=/labs/dirbas/acorvino/thymus_9h/processed_data
+mkdir -p "$current_results"
+rsync -rltp --chmod=Dg+s --ignore-existing --partial --progress \
+  "$previous_results/" "$current_results/"
+```
+
+The trailing slashes copy the **contents** of `processed_data`, preserving
+`qc/visium_hd_008um/FD1/`, etc. Existing destination files are left in place;
+the source is retained. Check file contents with a checksum dry run:
+
+```bash
+rsync -rcn --itemize-changes "$previous_results/" "$current_results/"
+```
+
+This check should exit successfully and print no file differences. If it lists
+files, inspect those missing or differing copies before rerunning QC; do not
+delete the original results. Extra files at the destination are allowed.
+
+Copy the complete QC directory, including each mouse's `bin_qc.parquet` and
+`qc_metadata.json`. With unchanged raw archives and reference lists, the next
+QC run can reuse those tables and regenerate plots without reading the matrices.
+Do not add `--force` for a plotting-only rerun. If no previous results exist,
+skip the copy and run QC normally.
+
+Remove any old `--output-dir` override from submission commands to use the new
+configured default. Local downloaded results and previously generated reports
+stay where they are; this update changes cluster output destinations.
+
+### Submit QC
 
 The existing `scripts/01_qc.py --visium-hd` reproduces the 8 µm notebook QC
 and candidate-threshold comparison without a Jupyter session. It does not apply
@@ -120,8 +165,9 @@ analysis on a login node.
 ### Saved outputs
 
 By default, outputs go to
-`/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/qc/visium_hd_008um/`.
-Override with `--output-dir PATH`.
+`/labs/dirbas/acorvino/thymus_9h/processed_data/qc/visium_hd_008um/`.
+The script creates missing output directories. Override with `--output-dir PATH`
+to use that exact QC directory instead (no `visium_hd_008um` suffix is added).
 
 Each mouse folder contains:
 
@@ -131,6 +177,13 @@ Each mouse folder contains:
 - `qc_summary.csv`: QC distributions and percentiles.
 - `candidate_summary.csv`: thresholds, retained bins/transcripts, and retained medians.
 - `qc_distributions.png`, `spatial_qc.png`, and `candidate_spatial_retention.png`.
+
+Spatial maps draw filled HD bin footprints instead of tiny scatter markers to
+avoid a coarse rendering grid. Barcode rows/columns define the bin layout;
+an affine fit to image coordinates preserves its orientation. Counts and QC
+thresholds are unchanged, with no smoothing or aggregation. Candidate panels
+share the color limits of all input bins within each sample. Excluded bins are
+gray, and positions absent from the input remain empty.
 
 `comparisons/FD1_FD2/` (or the selected mouse IDs joined by underscores) contains:
 
@@ -150,6 +203,8 @@ after saving. No filtering threshold is selected automatically.
 Completed per-mouse QC tables are reused if the archive path, size, modification
 time, matrix selection, and reference lists match. Changing the comparison from
 two mice to all 12 reuses completed mice. Plots and summaries are regenerated.
+After a plotting-only update, rerun the same command without `--force` to redraw
+the figures from the existing per-bin tables when their cache metadata matches.
 Use `--force` to recompute metrics, including after code changes that alter QC
 semantics or an archive replacement that preserves its size and timestamp.
 `--no-plots` writes tables only; existing plots are not updated in that mode.

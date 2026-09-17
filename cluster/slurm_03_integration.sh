@@ -4,13 +4,16 @@
 #SBATCH --time=06:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --account=your_account
+#SBATCH --account=dirbas
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
 
 set -euo pipefail
 
 echo "Start: $(date)"
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Submit from the repository root; SLURM runs a spooled copy of this script.
+ROOT_DIR="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$ROOT_DIR"
 
 # Module/Conda initialization may read unset interactive variables such as PS1.

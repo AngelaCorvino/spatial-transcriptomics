@@ -26,7 +26,7 @@ stats = compute_statistics(adata)
   `configs/cluster.yaml`. Set `SPATIAL_CONFIG` before starting Jupyter to override it.
 - **Raw data**: `/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data/`, with each
   mouse archive at `FD1/binned_outputs.tar.gz`, `FD2/binned_outputs.tar.gz`, etc.
-- **Processed data**: `/oak/stanford/groups/dirbas/Angela/thymus_9h/processed_data/`.
+- **Processed data**: `/labs/dirbas/acorvino/thymus_9h/processed_data/`.
   The batch QC script saves reports under `qc/visium_hd_008um/`; the notebook
   displays its QC tables and plots without automatically exporting them.
 - **Scratch**: `${TMPDIR}/FD1_HD` holds the staged FD1 inputs for the current job.
@@ -34,9 +34,11 @@ stats = compute_statistics(adata)
   `load_config()` without an argument instead reads the gitignored
   `local_config.yaml`, or repository defaults when that file is absent.
 
-Existing FD1–FD12 folders must be placed under `raw_data` on the cluster. Rerun
-the notebook setup cell after updating the configuration so the kernel uses the
-new paths. See [cluster setup](../cluster/README.md) for migration and batch jobs.
+Raw archives remain at the path above. Both `/labs` and the group's `/oak`
+allocation are hosted on Oak. Rerun the notebook setup cell after updating the
+configuration so the kernel uses the new paths. Existing batch results must be
+copied separately to the new output directory to reuse QC caches; see
+[cluster setup](../cluster/README.md) for migration and batch jobs.
 
 ### Local setup (from the repository root)
 

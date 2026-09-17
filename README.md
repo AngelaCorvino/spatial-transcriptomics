@@ -147,22 +147,29 @@ in `src/spatial_transcriptomics`.
 Visium HD notebook:
 
 ```text
-/oak/stanford/groups/dirbas/Angela/thymus_9h/
-├── raw_data/
-│   ├── FD1/binned_outputs.tar.gz
-│   ├── FD2/binned_outputs.tar.gz
-│   └── ... FD12/
-└── processed_data/
-    ├── qc/visium_hd_008um/
-    ├── preprocess/
-    ├── integration/
-    ├── spatial/
-    └── cell_mapping/
+/oak/stanford/groups/dirbas/Angela/thymus_9h/raw_data/
+├── FD1/binned_outputs.tar.gz
+├── FD2/binned_outputs.tar.gz
+└── ... FD12/
+
+/labs/dirbas/acorvino/thymus_9h/processed_data/
+├── qc/visium_hd_008um/
+├── preprocess/
+├── integration/
+├── spatial/
+└── cell_mapping/
 ```
 
-Place the existing FD1–FD12 sample folders under `raw_data` before using this
-configuration. QC reports are saved under `processed_data/qc/visium_hd_008um`;
-the other output directories are reserved for their corresponding pipeline steps.
+Both locations are hosted on Oak: `/labs` is SCG-managed storage, while the
+`/oak/stanford/groups` path belongs to a separate Oak allocation. See the
+[Stanford Oak FAQ](https://docs.oak.stanford.edu/faq/). Check available quota on
+the cluster; changing paths does not establish that more space is available.
+
+FD1–FD12 sample folders remain under the raw-data path above. QC reports are
+saved under the `/labs` results root in `qc/visium_hd_008um`; the other output
+directories are reserved for their corresponding pipeline steps.
+Updating the config does not move existing results: copy them as described in
+the cluster migration instructions to reuse cached QC tables.
 Extraction uses job-local `TMPDIR`. Repository code and the Python environment
 remain under `/home/acorvino/`.
 
