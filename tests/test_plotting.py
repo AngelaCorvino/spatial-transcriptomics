@@ -10,8 +10,10 @@ import pytest
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import QuadMesh
 
+from spatial_transcriptomics.analysis import evaluate_hd_qc
 from spatial_transcriptomics.plotting import (
     plot_hd_qc,
+    plot_hd_qc_comparison,
     plot_hd_spatial,
     pretty_title,
     stacked_bar,
@@ -184,6 +186,58 @@ def test_hd_qc_includes_unfiltered_mt_on_its_percentage_scale(
     plot_hd_qc(qc, "FD1", tmp_path)
     assert len(saved) == 3
     pd.testing.assert_frame_equal(qc, original)
+
+
+@pytest.mark.parametrize("n_mice", [1, 12])
+def test_combined_qc_distributions_preserve_all_bins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, n_mice: int
+) -> None:
+    """Every mouse keeps its unfiltered histograms and original metric scales."""
+    frames = {}
+    qc_paths = {}
+    candidates = []
+    for i in range(1, n_mice + 1):
+        mouse = f"FD{i}"
+        qc = _hd_plot_frame().assign(
+            n_genes_by_counts=[70, 9, 80, 25, 40],
+            pct_counts_mt=[0, 10, 20, 50, 100],
+        ).iloc[: 4 + i % 2].copy()
+        qc["total_counts"] *= i
+        frames[mouse] = qc
+        qc_paths[mouse] = tmp_path / f"{mouse}.parquet"
+        qc.to_parquet(qc_paths[mouse])
+        summary, _ = evaluate_hd_qc(qc)
+        candidates.append(summary.assign(mouse_id=mouse))
+    saved = []
+
+    def inspect_figure(fig, path):
+        saved.append(path.name)
+        if path.name == "cross_mouse_qc_distributions.png":
+            assert len(fig.axes) == 3 * n_mice
+            for i, (mouse, qc) in enumerate(frames.items()):
+                row = fig.axes[3 * i : 3 * i + 3]
+                assert row[0].get_ylabel().startswith(f"{mouse}\n")
+                for ax, column in zip(
+                    row, ["total_counts", "n_genes_by_counts", "pct_counts_mt"]
+                ):
+                    values = qc[column].to_numpy()
+                    if column != "pct_counts_mt":
+                        values = np.log10(values + 1)
+                    heights, edges = np.histogram(values, bins=80)
+                    np.testing.assert_array_equal(
+                        [patch.get_height() for patch in ax.patches], heights
+                    )
+                    np.testing.assert_allclose(
+                        [patch.get_x() for patch in ax.patches], edges[:-1]
+                    )
+                    assert sum(heights) == len(qc)
+        plt.close(fig)
+
+    monkeypatch.setattr(
+        "spatial_transcriptomics.plotting._save_qc_figure", inspect_figure
+    )
+    plot_hd_qc_comparison(pd.concat(candidates), qc_paths, tmp_path)
+    assert saved.count("cross_mouse_qc_distributions.png") == 1
 
 
 @pytest.mark.parametrize(

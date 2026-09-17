@@ -44,8 +44,10 @@ copied separately to the new output directory to reuse QC caches; see
 
 ```bash
 make dev-install
-cp local_config.yaml.template local_config.yaml
-SPATIAL_CONFIG=configs/local.yaml make lab
+# First-time setup only; preserve an existing local_config.yaml.
+cp -n configs/local.yaml local_config.yaml
+# Set data, output, and staging paths outside the code repository.
+SPATIAL_CONFIG=local_config.yaml make lab
 ```
 
 Then open the notebook from Jupyter Lab. Imports should work directly because

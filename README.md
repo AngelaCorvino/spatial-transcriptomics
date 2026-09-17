@@ -47,8 +47,8 @@ make setup
 3. Create your local machine-specific config:
 
 ```bash
-cp local_config.yaml.template local_config.yaml
-# Edit with your local absolute paths
+cp -n configs/local.yaml local_config.yaml
+# Edit with your external data/results paths; preserve existing local settings.
 ```
 
 4. Start Jupyter Lab:
@@ -127,7 +127,7 @@ make lab
 This repository supports both local and cluster execution without duplicating
 analysis code.
 
-- Local execution: `python -u scripts/01_qc.py --config configs/local.yaml`
+- Local execution: `python -u scripts/01_qc.py --config local_config.yaml`
 - Cluster Visium HD QC: `sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD1 FD2`
 
 Local and cluster configs differ in environment settings, output directories,
@@ -136,7 +136,11 @@ in `src/spatial_transcriptomics`.
 
 #### Local vs Cluster config
 
-- `configs/local.yaml` is for running on a laptop or workstation.
+- `configs/local.yaml` is a laptop example. For this project, copy it to the
+  gitignored `local_config.yaml` and set `data_dir`, `output_dir`, `visium_hd`
+  staging/source paths, and `paths` outputs outside the code repository.
+- Set `report_dir` in `local_config.yaml` to the experimental report folder so
+  the report agent can locate it. Keep reports and their images with the results.
 - `configs/cluster.yaml` is for running inside an HPC SLURM job.
 - Both files define data paths, sample metadata, analysis thresholds, and
   output directories.

@@ -205,6 +205,8 @@ gray, and positions absent from the input remain empty.
 
 - `cross_mouse_qc_summary.csv` and `cross_mouse_candidate_summary.csv`.
 - `cross_mouse_failure_summary.csv`: all per-mouse failure tables combined.
+- `cross_mouse_qc_distributions.png`: one figure with a row per mouse and columns
+  for UMIs, detected genes, and MT percentage; 12 rows with `--all-mice`.
 - `cross_mouse_retention.png` and `cross_mouse_spatial_*.png` (moderate threshold,
   up to four mice per page).
 - `run.json`: requested inputs and run status; `complete` is written only after

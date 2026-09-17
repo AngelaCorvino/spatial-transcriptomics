@@ -97,6 +97,19 @@ def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None):
     return points
 
 
+def _plot_hd_qc_distributions(axes, qc: pd.DataFrame) -> None:
+    """Use the same metric transforms and histograms in both QC layouts."""
+    columns = ["total_counts", "n_genes_by_counts", "pct_counts_mt"]
+    for ax, column in zip(axes, columns):
+        values = qc[column].to_numpy()
+        if column in {"total_counts", "n_genes_by_counts"}:
+            values = np.log10(values + 1)
+            column = f"log10({column} + 1)"
+        ax.hist(values, bins=80)
+        ax.set_xlabel(column)
+        ax.set_ylabel("Number of 8 µm bins")
+
+
 def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
     """Save the notebook's distributions, spatial QC, and candidate footprints."""
     columns = ["total_counts", "n_genes_by_counts", "pct_counts_mt"]
@@ -108,14 +121,7 @@ def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
         squeeze=False,
         constrained_layout=True,
     )
-    for ax, column in zip(axes.flat, columns):
-        values = qc[column].to_numpy()
-        if column in {"total_counts", "n_genes_by_counts"}:
-            values = np.log10(values + 1)
-            column = f"log10({column} + 1)"
-        ax.hist(values, bins=80)
-        ax.set_xlabel(column)
-        ax.set_ylabel("Number of 8 µm bins")
+    _plot_hd_qc_distributions(axes.flat, qc)
     fig.suptitle(f"{mouse_id}: QC distributions (no additional filtering)")
     _save_qc_figure(fig, output_dir / "qc_distributions.png")
 
@@ -147,7 +153,34 @@ def plot_hd_qc_comparison(
     qc_paths: dict[str, Path],
     output_dir: Path,
 ) -> None:
-    """Save cross-mouse retention curves and a paginated moderate-filter grid."""
+    """Save combined distributions, retention curves, and spatial comparisons."""
+    items = list(qc_paths.items())
+    if items:
+        fig, axes = plt.subplots(
+            len(items),
+            3,
+            figsize=(15, 2.5 * len(items)),
+            squeeze=False,
+            sharex="col",
+            constrained_layout=True,
+        )
+        for row, (sample_id, path) in zip(axes, items):
+            qc = pd.read_parquet(
+                path, columns=["total_counts", "n_genes_by_counts", "pct_counts_mt"]
+            )
+            evaluate_hd_qc(qc)
+            _plot_hd_qc_distributions(row, qc)
+            row[0].set_ylabel(f"{sample_id}\nNumber of 8 µm bins")
+            for ax in row[1:]:
+                ax.set_ylabel("")
+        for ax, title in zip(axes[0], ["UMIs", "Detected genes", "Mitochondrial %"]):
+            ax.set_title(title)
+        for row in axes[:-1]:
+            for ax in row:
+                ax.set_xlabel("")
+        fig.suptitle("QC distributions across mice · 8 µm · no additional filtering")
+        _save_qc_figure(fig, output_dir / "cross_mouse_qc_distributions.png")
+
     fig, axes = plt.subplots(1, 2, figsize=(13, 5), constrained_layout=True)
     for mouse_id, frame in candidates.groupby("mouse_id", sort=False):
         for ax, column, label in zip(
@@ -170,7 +203,6 @@ def plot_hd_qc_comparison(
     fig.suptitle("Candidate QC retention across 8 µm samples")
     _save_qc_figure(fig, output_dir / "cross_mouse_retention.png")
 
-    items = list(qc_paths.items())
     for start in range(0, len(items), 4):
         page = items[start : start + 4]
         ncols = min(2, len(page))
