@@ -2,6 +2,7 @@
 
 import argparse
 import io
+import json
 import runpy
 import shutil
 import tarfile
@@ -17,6 +18,7 @@ from spatial_transcriptomics.data import (
     load_data,
     load_reference_genes,
     load_visium_hd_bin,
+    load_visium_hd_histology,
     read_de_csv,
     stage_visium_hd_qc,
 )
@@ -155,6 +157,42 @@ def test_hd_staging_extracts_only_requested_inputs(tmp_path: Path) -> None:
         stage_visium_hd_qc(archive, tmp_path / "missing", bin_size_um=16)
 
 
+def test_hd_histology_reads_image_and_matching_bin_scale(tmp_path: Path) -> None:
+    """Read separate archives, select 8 µm metadata, and preserve image pixels."""
+    import matplotlib.image as mpimg
+
+    original = np.zeros((12, 16, 3), dtype=np.uint8)
+    original[2:5, 7:9] = [255, 0, 128]
+    image_buffer = io.BytesIO()
+    mpimg.imsave(image_buffer, original, format="png")
+    binned = tmp_path / "binned_outputs.tar.gz"
+    spatial = tmp_path / "spatial.tar.gz"
+    for archive_path, entries in [
+        (
+            binned,
+            {
+                "square_002um/spatial/scalefactors_json.json": json.dumps(
+                    {"tissue_hires_scalef": 1}
+                ).encode(),
+                "prefix/square_008um/spatial/scalefactors_json.json": json.dumps(
+                    {"tissue_hires_scalef": 0.25}
+                ).encode(),
+            },
+        ),
+        (spatial, {"tissue_hires_image.png": image_buffer.getvalue()}),
+    ]:
+        with tarfile.open(archive_path, "w:gz") as archive:
+            for name, content in entries.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+    image, scale = load_visium_hd_histology(binned, spatial)
+    assert scale == 0.25
+    np.testing.assert_allclose(image[:, :, :3], original / 255, atol=1e-7)
+    with pytest.raises(FileNotFoundError, match="tissue_hires_image"):
+        load_visium_hd_histology(binned, binned)
+
+
 def test_hd_batch_outputs_and_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -180,6 +218,9 @@ def test_hd_batch_outputs_and_cache(
     ]
     fixture = tmp_path / "fixture" / "binned_outputs" / "square_008um"
     (fixture / "spatial").mkdir(parents=True)
+    (fixture / "spatial" / "scalefactors_json.json").write_text(
+        '{"tissue_hires_scalef": 0.5}'
+    )
     matrix = sparse.csc_matrix(counts.T)
     with h5py.File(fixture / "filtered_feature_bc_matrix.h5", "w") as handle:
         group = handle.create_group("matrix")
@@ -223,6 +264,8 @@ def test_hd_batch_outputs_and_cache(
         output_dir=output,
         force=False,
         no_plots=False,
+        he_overlays=False,
+        he_image_root=None,
     )
     config = {"repo_root": str(tmp_path), "visium_hd": {"bin_size_um": 8}}
     assert run_qc(config, args) == 0
@@ -243,7 +286,8 @@ def test_hd_batch_outputs_and_cache(
         pd.read_csv(output / "FD1" / "failure_summary.csv"),
         failures[failures["mouse_id"] == "FD1"].reset_index(drop=True),
     )
-    assert len(list(output.rglob("*.png"))) == 8
+    assert (comparison / "cross_mouse_qc_distributions.png").is_file()
+    assert len(list(output.rglob("*.png"))) == 9
     assert not list(scratch.iterdir())
 
     def fail_load(*_args, **_kwargs):
@@ -275,6 +319,31 @@ def test_hd_batch_outputs_and_cache(
         summary,
     )
     assert (previous_output / "FD1" / "bin_qc.parquet").read_bytes() == cached_table
+
+    # H&E can live separately; overlay generation must not reload expression data.
+    import matplotlib.image as mpimg
+
+    image_buffer = io.BytesIO()
+    mpimg.imsave(image_buffer, np.ones((20, 20, 3)), format="png")
+    image_root = tmp_path / "images"
+    for mouse in args.mice:
+        (image_root / mouse).mkdir(parents=True)
+        with tarfile.open(image_root / mouse / "spatial.tar.gz", "w:gz") as archive:
+            content = image_buffer.getvalue()
+            info = tarfile.TarInfo("tissue_hires_image.png")
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+    args.he_image_root = image_root
+    args.he_overlays = True
+    with pytest.raises(ValueError, match="--no-plots"):
+        run_qc(config, args)
+    args.no_plots = False
+    assert run_qc(config, args) == 0
+    for mouse in args.mice:
+        assert (output / mouse / "qc_failures_he.png").is_file()
+    assert (output / "FD1" / "bin_qc.parquet").read_bytes() == cached_table
+    args.he_overlays = False
+    args.no_plots = True
 
     # An interrupted marker write must trigger recomputation, including --force.
     metadata_path = output / "FD1" / "qc_metadata.json"

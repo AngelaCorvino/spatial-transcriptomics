@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import ListedColormap
 
-from spatial_transcriptomics.analysis import evaluate_hd_qc
+from spatial_transcriptomics.analysis import HD_QC_CANDIDATES, evaluate_hd_qc
 
 
 def _save_qc_figure(fig, outfile: Path) -> None:
@@ -22,13 +22,13 @@ def _save_qc_figure(fig, outfile: Path) -> None:
     plt.close(fig)
 
 
-def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None):
+def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None, *, show_excluded=True):
     """Draw filled HD bin footprints without scatter-marker moire.
 
     ``qc`` contains image coordinates ``x``/``y`` and HD barcodes as its index.
     Barcode rows/columns define adjacent square bins; an affine fit preserves
     their image orientation. Reject layouts deviating by more than 0.1 bin.
-    Missing bins stay transparent and excluded input bins are gray. Values and
+    Missing bins stay transparent; excluded bins are gray unless hidden. Values and
     masks follow dataframe order and are never modified, smoothed or aggregated.
     Color limits use all supplied values, keeping candidate panels comparable.
     """
@@ -71,7 +71,8 @@ def plot_hd_spatial(ax, qc: pd.DataFrame, mask, values=None):
         shading="flat", edgecolors="none", antialiased=False, rasterized=True
     )
     background = np.full(shape, np.nan)
-    background[row[~mask], col[~mask]] = 1
+    if show_excluded:
+        background[row[~mask], col[~mask]] = 1
     ax.pcolormesh(
         x,
         y,
@@ -146,6 +147,62 @@ def plot_hd_qc(qc: pd.DataFrame, mouse_id: str, output_dir: Path) -> None:
         ax.set_title(f"{label}\n{mask.sum():,} bins ({100 * mask.mean():.1f}%)")
     fig.suptitle(f"{mouse_id}: candidate retention at 8 µm")
     _save_qc_figure(fig, output_dir / "candidate_spatial_retention.png")
+
+
+def plot_hd_qc_histology(
+    qc: pd.DataFrame,
+    mouse_id: str,
+    image: np.ndarray,
+    scale: float,
+    output_dir: Path,
+) -> None:
+    """Overlay provisional moderate QC failures on registered H&E; retain all bins."""
+    evaluate_hd_qc(qc)
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("The H&E scale factor must be finite and positive.")
+    candidate, min_counts, min_genes, max_mt = next(
+        item for item in HD_QC_CANDIDATES if item[0] == "Moderate 8 µm"
+    )
+    low_content = (qc["total_counts"] < min_counts) | (
+        qc["n_genes_by_counts"] < min_genes
+    )
+    high_mt = qc["pct_counts_mt"] > max_mt
+    groups = [
+        ("MT-only", high_mt & ~low_content, "#d73027"),
+        ("Low-content only", low_content & ~high_mt, "#0072b2"),
+        ("MT + low content", high_mt & low_content, "#a000a0"),
+    ]
+    scaled_qc = qc.copy()
+    scaled_qc[["x", "y"]] *= scale
+    height, width = image.shape[:2]
+    inside = scaled_qc["x"].between(-0.5, width - 0.5) & scaled_qc["y"].between(
+        -0.5, height - 0.5
+    )
+    if not inside.any():
+        raise ValueError("No bin centers overlap the H&E image; check registration.")
+    fig, axes = plt.subplots(2, 2, figsize=(16, 16), constrained_layout=True)
+    try:
+        for ax in axes.flat:
+            ax.imshow(image, origin="upper")
+            ax.set_axis_off()
+        axes.flat[0].set_title("H&E")
+        for ax, (label, mask, color) in zip(list(axes.flat)[1:], groups):
+            mesh = plot_hd_spatial(ax, scaled_qc, mask, show_excluded=False)
+            mesh.set_cmap(ListedColormap([color]))
+            mesh.set_alpha(0.55)
+            ax.set_title(f"{label}: {mask.sum():,} bins ({100 * mask.mean():.1f}%)")
+        for ax in axes.flat:
+            ax.set_xlim(-0.5, width - 0.5)
+            ax.set_ylim(height - 0.5, -0.5)
+        fig.suptitle(
+            f"{mouse_id}: {candidate} — provisional H&E review\n"
+            f"Low content: UMI < {min_counts} or genes < {min_genes}; "
+            f"high MT: > {max_mt:g}%\n"
+            "Percentages use all input bins; no additional filtering"
+        )
+        _save_qc_figure(fig, output_dir / "qc_failures_he.png")
+    finally:
+        plt.close(fig)
 
 
 def plot_hd_qc_comparison(

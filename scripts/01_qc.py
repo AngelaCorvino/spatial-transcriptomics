@@ -30,6 +30,7 @@ from spatial_transcriptomics.data import (
     load_data,
     load_reference_genes,
     load_visium_hd_bin,
+    load_visium_hd_histology,
     stage_visium_hd_qc,
 )
 
@@ -62,6 +63,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--force", action="store_true", help="Recompute cached HD QC.")
     parser.add_argument("--no-plots", action="store_true", help="Write HD tables only.")
+    parser.add_argument(
+        "--he-overlays",
+        action="store_true",
+        help="Overlay provisional moderate QC failures on registered H&E.",
+    )
+    parser.add_argument(
+        "--he-image-root",
+        type=Path,
+        help="Parent of FD*/spatial.tar.gz; defaults to the HD source root.",
+    )
     return parser.parse_args()
 
 
@@ -70,7 +81,14 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
     import matplotlib
 
     matplotlib.use("Agg")
-    from spatial_transcriptomics.plotting import plot_hd_qc, plot_hd_qc_comparison
+    from spatial_transcriptomics.plotting import (
+        plot_hd_qc,
+        plot_hd_qc_comparison,
+        plot_hd_qc_histology,
+    )
+
+    if args.he_overlays and args.no_plots:
+        raise ValueError("--he-overlays cannot be combined with --no-plots.")
 
     hd = get_config_section(config, "visium_hd")
     if int(str(hd.get("bin_size_um", 8))) != 8:
@@ -92,6 +110,7 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         ).parent
     )
     source_root = source_root.expanduser().resolve()
+    image_root = (args.he_image_root or source_root).expanduser().resolve()
     paths = get_config_section(config, "paths")
     output_dir = args.output_dir or (
         get_section_path(config, paths, "qc_output", "results/qc") / "visium_hd_008um"
@@ -118,6 +137,11 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
     for archive in archives.values():
         if not archive.is_file():
             raise FileNotFoundError(archive)
+    if args.he_overlays:
+        for mouse in mice:
+            spatial_archive = image_root / mouse / "spatial.tar.gz"
+            if not spatial_archive.is_file():
+                raise FileNotFoundError(spatial_archive)
 
     comparison_dir = output_dir / "comparisons" / "_".join(mice)
     comparison_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +153,8 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         "bin_size_um": 8,
         "use_filtered_matrix": use_filtered,
         "plots_requested": not args.no_plots,
+        "he_overlays": args.he_overlays,
+        "he_image_root": str(image_root) if args.he_overlays else None,
     }
     run_path = comparison_dir / "run.json"
     run_path.write_text(json.dumps(run_record, indent=2) + "\n")
@@ -255,6 +281,15 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         if not args.no_plots:
             print(f"{mouse}: saving plots", flush=True)
             plot_hd_qc(qc, mouse, sample_dir)
+            if args.he_overlays:
+                print(
+                    f"{mouse}: reading registered H&E and plotting failures", flush=True
+                )
+                image, scale = load_visium_hd_histology(
+                    archive, image_root / mouse / "spatial.tar.gz"
+                )
+                plot_hd_qc_histology(qc, mouse, image, scale, sample_dir)
+                del image
         del qc
         gc.collect()
         print(

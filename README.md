@@ -130,6 +130,21 @@ analysis code.
 - Local execution: `python -u scripts/01_qc.py --config local_config.yaml`
 - Cluster Visium HD QC: `sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD1 FD2`
 
+To review provisional moderate QC failures against H&E, add `--he-overlays`.
+Each sample gets `qc_failures_he.png`: H&E alone, MT-only, low-content only
+(UMI < 25 or genes < 20), and overlapping failures (MT > 20%). No bins are removed.
+The script reuses cached QC and reads the 8-µm scale factor from
+`binned_outputs.tar.gz`. If `spatial.tar.gz` is stored elsewhere, specify its
+parent sample directory root:
+
+```bash
+sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD5 FD9 --he-overlays \
+  --he-image-root /oak/stanford/groups/dirbas/raw/Dirbas_Processed_Visium_HD_Data
+```
+
+Check tissue edges and internal landmarks for alignment before interpreting
+the overlays. These are review figures; the thresholds remain provisional.
+
 Local and cluster configs differ in environment settings, output directories,
 and cluster-specific submission options, while the analysis code remains shared
 in `src/spatial_transcriptomics`.

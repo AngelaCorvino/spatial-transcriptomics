@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import tarfile
@@ -240,6 +241,39 @@ def calc_qc_metrics(
             )
 
     return adata
+
+
+def load_visium_hd_histology(
+    binned_archive: str | Path,
+    spatial_archive: str | Path,
+) -> tuple[np.ndarray, float]:
+    """Read the hires image and its 8 µm scale factor without extracting tarballs."""
+    import matplotlib.image as mpimg
+
+    def read_member(archive_path, suffix):
+        with tarfile.open(archive_path, "r|gz") as archive:
+            for member in archive:
+                if Path(member.name).parts[-len(suffix) :] != suffix:
+                    continue
+                if not member.isfile():
+                    raise ValueError(f"Expected a regular file: {member.name}")
+                source = archive.extractfile(member)
+                if source is not None:
+                    with source:
+                        return source.read()
+        raise FileNotFoundError(f"{archive_path} is missing {'/'.join(suffix)}")
+
+    scales = json.loads(
+        read_member(
+            binned_archive, ("square_008um", "spatial", "scalefactors_json.json")
+        )
+    )
+    scale = float(scales["tissue_hires_scalef"])
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("tissue_hires_scalef must be finite and positive.")
+    image_bytes = read_member(spatial_archive, ("tissue_hires_image.png",))
+    image = mpimg.imread(io.BytesIO(image_bytes), format="png")
+    return image, scale
 
 
 def stage_visium_hd_qc(

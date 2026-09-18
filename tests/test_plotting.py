@@ -14,6 +14,7 @@ from spatial_transcriptomics.analysis import evaluate_hd_qc
 from spatial_transcriptomics.plotting import (
     plot_hd_qc,
     plot_hd_qc_comparison,
+    plot_hd_qc_histology,
     plot_hd_spatial,
     pretty_title,
     stacked_bar,
@@ -78,6 +79,50 @@ def _hd_plot_frame() -> pd.DataFrame:
         },
         index=[f"s_008um_{row:05d}_{col:05d}-1" for row, col in zip(rows, cols)],
     )
+
+
+@pytest.mark.parametrize("all_pass", [False, True])
+def test_hd_histology_alignment_and_exclusive_failures(tmp_path, monkeypatch, all_pass):
+    """Keep H&E orientation, transparent background, and threshold equality correct."""
+    qc = _hd_plot_frame()
+    qc["total_counts"] = [80, 10, 90, 25, 50]
+    qc["n_genes_by_counts"] = [50, 8, 50, 20, 10]
+    qc["pct_counts_mt"] = [21, 20, 20, 20, 21]
+    if all_pass:
+        qc[["total_counts", "n_genes_by_counts", "pct_counts_mt"]] = [25, 20, 20]
+    original = qc.copy(deep=True)
+    image = np.ones((150, 100, 3))
+    inspected = []
+
+    def inspect_figure(fig, outfile):
+        assert outfile.name == "qc_failures_he.png"
+        for ax in fig.axes:
+            np.testing.assert_array_equal(ax.images[0].get_array(), image)
+            assert ax.get_xlim() == (-0.5, 99.5)
+            assert ax.get_ylim() == (149.5, -0.5)
+        for ax, selected in zip(fig.axes[1:], [0, 1, 4]):
+            background, overlay = ax.collections
+            assert background.get_array().count() == 0
+            assert overlay.get_array().count() == (0 if all_pass else 1)
+            if not all_pass:
+                corners = overlay.get_coordinates()
+                centers = (corners[:-1, :-1] + corners[1:, 1:]) / 2
+                mask = ~np.ma.getmaskarray(overlay.get_array()).reshape(
+                    centers.shape[:2]
+                )
+                np.testing.assert_allclose(
+                    centers[mask][0], qc.iloc[selected][["x", "y"]].to_numpy() * 0.5
+                )
+            assert overlay.get_alpha() == 0.55
+        fig.savefig(outfile)
+        inspected.append(True)
+
+    monkeypatch.setattr(
+        "spatial_transcriptomics.plotting._save_qc_figure", inspect_figure
+    )
+    plot_hd_qc_histology(qc, "synthetic", image, 0.5, tmp_path)
+    assert inspected == [True]
+    pd.testing.assert_frame_equal(qc, original)
 
 
 def test_hd_spatial_preserves_values_masks_and_affine_geometry() -> None:
