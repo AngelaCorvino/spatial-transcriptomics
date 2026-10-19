@@ -15,6 +15,56 @@ HD_QC_CANDIDATES = (
     ("Higher-content 8 µm", 50, 40, 20.0),
 )
 
+# Selected on 19 October 2026. Keep v1 fixed for reproducible downstream inputs.
+HD_QC_FILTER_VERSION = "thymus_8um_qc_v1"
+HD_QC_SELECTED_CANDIDATE = "Moderate 8 µm"
+
+
+def selected_hd_qc_policy() -> dict[str, Any]:
+    """Describe the selected first-pass filter independently of generic defaults."""
+    candidate = next(
+        row for row in HD_QC_CANDIDATES if row[0] == HD_QC_SELECTED_CANDIDATE
+    )
+    _, min_counts, min_genes, max_mt = candidate
+    if (min_counts, min_genes, max_mt) != (25, 20, 20.0):
+        raise ValueError("The v1 QC thresholds have changed; define a new version.")
+    return {
+        "version": HD_QC_FILTER_VERSION,
+        "selected_date": "2026-10-19",
+        "candidate": HD_QC_SELECTED_CANDIDATE,
+        "bin_size_um": 8,
+        "input": "Space Ranger filtered, in-tissue 8 µm bins",
+        "min_counts": min_counts,
+        "min_genes": min_genes,
+        "max_pct_mt": max_mt,
+        "thresholds_inclusive": True,
+        "anatomical_roi_applied": False,
+        "ribosomal_filter_applied": False,
+        "upper_counts_or_genes_filter_applied": False,
+        "normalization_applied": False,
+        "gene_features_filtered": False,
+        "scope": "All input tissue; no color, edge, cluster or sample exclusion",
+    }
+
+
+def select_hd_qc_bins(qc: pd.DataFrame) -> pd.DataFrame:
+    """Return auditable v1 flags for every input bin, preserving barcode order."""
+    policy = selected_hd_qc_policy()
+    _, masks = evaluate_hd_qc(qc)
+    if not qc.index.is_unique or qc.index.hasnans:
+        raise ValueError("Input bin barcodes must be unique and nonmissing.")
+    if (qc[["total_counts", "n_genes_by_counts", "pct_counts_mt"]] < 0).any().any():
+        raise ValueError("QC metrics cannot be negative.")
+    if (qc["pct_counts_mt"] > 100).any():
+        raise ValueError("Mitochondrial percentages cannot exceed 100.")
+    result = qc.copy()
+    result["fails_umi"] = qc["total_counts"] < policy["min_counts"]
+    result["fails_genes"] = qc["n_genes_by_counts"] < policy["min_genes"]
+    result["fails_mt"] = qc["pct_counts_mt"] > policy["max_pct_mt"]
+    result["qc_keep"] = masks[HD_QC_SELECTED_CANDIDATE]
+    result["qc_filter_version"] = HD_QC_FILTER_VERSION
+    return result
+
 
 def evaluate_hd_qc(
     qc: pd.DataFrame,

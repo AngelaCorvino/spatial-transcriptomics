@@ -143,7 +143,7 @@ analysis code.
 - Local execution: `python -u scripts/01_qc.py --config local_config.yaml`
 - Cluster Visium HD QC: `sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD1 FD2`
 
-To review provisional moderate QC failures against H&E, add `--he-overlays`.
+To review moderate QC failures against H&E, add `--he-overlays`.
 Each sample gets `qc_failures_he.png`: H&E alone, MT-only, low-content only
 (UMI < 25 or genes < 20), and overlapping failures (MT > 20%). No bins are removed.
 The script reuses cached QC and reads the 8-µm scale factor from
@@ -156,7 +156,42 @@ sbatch cluster/slurm_01_qc.sh --visium-hd --mice FD5 FD9 --he-overlays \
 ```
 
 Check tissue edges and internal landmarks for alignment before interpreting
-the overlays. These are review figures; the thresholds remain provisional.
+the overlays. These figures show the filter's expected effects without applying it.
+
+#### Apply the selected thymus QC filter
+
+QC filter v1 (selected 19 October 2026) retains Space Ranger filtered, in-tissue
+8-µm bins with **UMIs ≥25, detected genes ≥20, and MT ≤20%**. All three boundaries
+are inclusive. It keeps all tissue eligible, including pink tissue, edges and
+uncertain fragments; proposed anatomical contours remain review-only. There is
+no upper UMI/gene cutoff, ribosomal cutoff, or whole-sample exclusion. A QC failure
+is an operational exclusion, not proof of tissue damage.
+
+Run on the cluster after the existing HD QC tables are available:
+
+```bash
+sbatch cluster/slurm_02_preprocess.sh --visium-hd --all-mice
+```
+
+This HD branch uses the selected v1 rules rather than the generic `analysis`
+defaults. It reloads one mouse at a time, verifies barcodes, metrics and spatial
+coordinates against the saved QC review, and preserves the inputs. Float64 MT
+arithmetic retains exact-20% bins that older rounding could exclude; the summary
+records these boundary corrections. Other changes in retention stop the run.
+Outputs are under the configured `paths.preprocess_output`, in
+`visium_hd_008um/thymus_8um_qc_v1/`:
+
+- `FD*/filtered_counts.h5ad`: retained **unnormalized** counts, all gene features,
+  sample IDs, full-resolution coordinates and image scale factors.
+- `FD*/bin_selection.parquet`: metrics and independent failure flags for every
+  input bin, including excluded bins.
+- `filter_summary.csv` and `FD*/failure_summary.csv`: per-mouse effects.
+- `run.json`: filter definition, input paths, code hashes, execution status and
+  completed mice. A complete 12-mouse run is
+  required before treating application as finished.
+
+Existing output directories are preserved. For a retry, supply an unused
+`--output-dir`; `--source-root` and `--qc-dir` can locate relocated inputs.
 
 Local and cluster configs differ in environment settings, output directories,
 and cluster-specific submission options, while the analysis code remains shared

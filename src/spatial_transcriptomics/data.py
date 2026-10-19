@@ -210,34 +210,35 @@ def calc_qc_metrics(
     sc = _load_scanpy()
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=percent_top)
 
-    total_counts = np.asarray(adata.X.sum(axis=1)).ravel()
+    # Use float64 before division so exact boundaries (e.g. 5/25 = 20%) stay exact.
+    total_counts = np.asarray(adata.X.sum(axis=1), dtype=float).ravel()
 
     if mt_genes:
         mt_genes_in_data = [gene for gene in mt_genes if gene in adata.var_names]
         if mt_genes_in_data:
-            mt_counts = np.asarray(adata[:, mt_genes_in_data].X.sum(axis=1)).ravel()
-            adata.obs["pct_counts_mt"] = (
-                np.divide(
-                    mt_counts,
-                    total_counts,
-                    out=np.zeros_like(mt_counts, dtype=float),
-                    where=total_counts > 0,
-                )
-                * 100
+            mt_counts = np.asarray(
+                adata[:, mt_genes_in_data].X.sum(axis=1),
+                dtype=float,
+            ).ravel()
+            adata.obs["pct_counts_mt"] = np.divide(
+                100 * mt_counts,
+                total_counts,
+                out=np.zeros_like(mt_counts),
+                where=total_counts > 0,
             )
 
     if rp_genes:
         rp_genes_in_data = [gene for gene in rp_genes if gene in adata.var_names]
         if rp_genes_in_data:
-            rp_counts = np.asarray(adata[:, rp_genes_in_data].X.sum(axis=1)).ravel()
-            adata.obs["pct_counts_rp"] = (
-                np.divide(
-                    rp_counts,
-                    total_counts,
-                    out=np.zeros_like(rp_counts, dtype=float),
-                    where=total_counts > 0,
-                )
-                * 100
+            rp_counts = np.asarray(
+                adata[:, rp_genes_in_data].X.sum(axis=1),
+                dtype=float,
+            ).ravel()
+            adata.obs["pct_counts_rp"] = np.divide(
+                100 * rp_counts,
+                total_counts,
+                out=np.zeros_like(rp_counts),
+                where=total_counts > 0,
             )
 
     return adata
@@ -281,6 +282,7 @@ def stage_visium_hd_qc(
     destination: str | Path,
     bin_size_um: int = 8,
     use_filtered_matrix: bool = True,
+    include_scalefactors: bool = False,
 ) -> Path:
     """Stream just the requested matrix and positions from a Space Ranger tarball.
 
@@ -302,6 +304,10 @@ def stage_visium_hd_qc(
         / "spatial"
         / "tissue_positions.parquet",
     }
+    if include_scalefactors:
+        wanted[(bin_name, "spatial", "scalefactors_json.json")] = (
+            bin_dir / "spatial" / "scalefactors_json.json"
+        )
     found = set()
     with tarfile.open(archive_path, "r|gz") as archive:
         for member in archive:
@@ -324,6 +330,48 @@ def stage_visium_hd_qc(
     if missing:
         raise FileNotFoundError(f"Archive {archive_path} is missing: {sorted(missing)}")
     return bin_dir
+
+
+def apply_hd_qc_filter(adata: Any, mt_genes: list[str]) -> tuple[Any, pd.DataFrame]:
+    """Apply selected 8-µm QC to raw counts; return retained bins and all flags.
+
+    The input object is unchanged. Keep all gene features and spatial metadata;
+    do not normalize, apply a ribosomal cutoff, or use anatomical proposals.
+    """
+    from spatial_transcriptomics.analysis import (
+        select_hd_qc_bins,
+        selected_hd_qc_policy,
+    )
+
+    if adata.uns.get("visium_hd", {}).get("bin_size_um") != 8:
+        raise ValueError("The selected QC filter requires 8 µm Visium HD bins.")
+    if "in_tissue" not in adata.obs or not adata.obs["in_tissue"].eq(1).all():
+        raise ValueError("Use Space Ranger filtered, in-tissue bins for QC v1.")
+    matched = [gene for gene in mt_genes if gene in adata.var_names]
+    if not matched or len(matched) != len(set(matched)):
+        raise ValueError("Unique matched mitochondrial reference genes are required.")
+    work = calc_qc_metrics(adata.copy(), mt_genes=mt_genes, percent_top=None)
+    columns = ["total_counts", "n_genes_by_counts", "pct_counts_mt"]
+    qc = work.obs[columns].copy()
+    qc.index.name = "barcode"
+    qc[["x", "y"]] = work.obsm["spatial"]
+    selection = select_hd_qc_bins(qc)
+    if not selection["qc_keep"].any():
+        raise ValueError(
+            "QC v1 retained no bins; inspect this input before proceeding."
+        )
+    for column in [
+        "fails_umi",
+        "fails_genes",
+        "fails_mt",
+        "qc_keep",
+        "qc_filter_version",
+    ]:
+        work.obs[column] = selection[column].to_numpy()
+    retained = work[selection["qc_keep"].to_numpy()].copy()
+    retained.uns["qc_filter"] = selected_hd_qc_policy()
+    retained.uns["qc_filter"]["mt_genes_matched"] = matched
+    return retained, selection
 
 
 def filter_by_quality(

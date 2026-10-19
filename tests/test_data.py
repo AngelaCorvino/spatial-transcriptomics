@@ -1,6 +1,7 @@
 """Tests for data loading helpers."""
 
 import argparse
+import hashlib
 import io
 import json
 import runpy
@@ -15,6 +16,7 @@ import pytest
 
 from spatial_transcriptomics import data as data_module
 from spatial_transcriptomics.data import (
+    apply_hd_qc_filter,
     load_data,
     load_reference_genes,
     load_visium_hd_bin,
@@ -22,6 +24,164 @@ from spatial_transcriptomics.data import (
     read_de_csv,
     stage_visium_hd_qc,
 )
+
+
+def _hd_filter_fixture():
+    """Small raw-count input with threshold boundaries and a high-content bin."""
+    ad = pytest.importorskip("anndata")
+    from scipy import sparse
+
+    counts = np.zeros((6, 6002), dtype=np.float32)
+    counts[0, :20] = [5] + [1] * 18 + [2]  # Exactly 25 UMIs, 20 genes, 20% MT.
+    counts[1, :20] = [4] + [1] * 18 + [2]  # UMI-only failure.
+    counts[2, 1:20] = [7] + [1] * 18  # Gene-only failure.
+    counts[3, :20] = [6] + [1] * 18 + [2]  # MT-only failure.
+    counts[5, :6001] = 1  # Above both legacy upper cutoffs.
+    counts[5, 1] = 40000
+    adata = ad.AnnData(
+        sparse.csr_matrix(counts),
+        obs=pd.DataFrame(
+            {"in_tissue": [1] * 6, "pct_counts_rp": [99.0] * 6},
+            index=[f"bin-{i}" for i in range(6)],
+        ),
+        var=pd.DataFrame(index=["mt-Nd1"] + [f"Gene{i}" for i in range(6001)]),
+    )
+    adata.obsm["spatial"] = np.arange(12, dtype=float).reshape(6, 2)
+    adata.uns["visium_hd"] = {"bin_size_um": 8}
+    return adata
+
+
+def test_apply_hd_filter_preserves_counts_features_coordinates_and_input(tmp_path):
+    pytest.importorskip("scanpy")
+    import anndata as ad
+
+    source = _hd_filter_fixture()
+    original = source.copy()
+    kept, selection = apply_hd_qc_filter(source, ["mt-Nd1"])
+    assert selection["qc_keep"].tolist() == [True, False, False, False, False, True]
+    assert kept.obs_names.tolist() == ["bin-0", "bin-5"]
+    assert kept.n_vars == 6002  # Includes an all-zero gene.
+    assert (kept.X != original.X[[0, 5]]).nnz == 0
+    np.testing.assert_array_equal(
+        kept.obsm["spatial"], original.obsm["spatial"][[0, 5]]
+    )
+    pd.testing.assert_frame_equal(source.obs, original.obs)
+    assert (source.X != original.X).nnz == 0
+    assert "qc_filter" not in source.uns
+    kept.write_h5ad(tmp_path / "filtered.h5ad")
+    restored = ad.read_h5ad(tmp_path / "filtered.h5ad")
+    assert (restored.X != kept.X).nnz == 0
+    assert not restored.uns["qc_filter"]["normalization_applied"]
+    with pytest.raises(ValueError, match="mitochondrial"):
+        apply_hd_qc_filter(source, ["not_present"])
+    source.obs.loc["bin-0", "in_tissue"] = 0
+    with pytest.raises(ValueError, match="in-tissue"):
+        apply_hd_qc_filter(source, ["mt-Nd1"])
+
+
+def test_hd_filter_job_roundtrip_and_review_consistency(tmp_path, monkeypatch):
+    """Real sparse H5 → archive → filter → H5AD, with unchanged source inputs."""
+    h5py = pytest.importorskip("h5py")
+    import anndata as ad
+
+    repo_root = Path(__file__).resolve().parents[1]
+    script = runpy.run_path(str(repo_root / "scripts" / "02_preprocess.py"))
+    source = _hd_filter_fixture()
+    fixture = tmp_path / "fixture" / "square_008um"
+    (fixture / "spatial").mkdir(parents=True)
+    matrix = source.X.T.tocsc()
+    with h5py.File(fixture / "filtered_feature_bc_matrix.h5", "w") as handle:
+        group = handle.create_group("matrix")
+        for name, values in {
+            "data": matrix.data,
+            "indices": matrix.indices,
+            "indptr": matrix.indptr,
+            "shape": matrix.shape,
+            "barcodes": np.array(source.obs_names, dtype="S"),
+        }.items():
+            group.create_dataset(name, data=values)
+        features = group.create_group("features")
+        for name, values in {
+            "id": [f"ENSM{i}" for i in range(source.n_vars)],
+            "name": source.var_names,
+            "feature_type": ["Gene Expression"] * source.n_vars,
+            "genome": ["mm10"] * source.n_vars,
+        }.items():
+            features.create_dataset(name, data=np.array(values, dtype="S"))
+    pd.DataFrame(
+        {
+            "barcode": source.obs_names,
+            "in_tissue": 1,
+            "pxl_col_in_fullres": source.obsm["spatial"][:, 0],
+            "pxl_row_in_fullres": source.obsm["spatial"][:, 1],
+        }
+    ).iloc[::-1].to_parquet(fixture / "spatial" / "tissue_positions.parquet")
+    (fixture / "spatial" / "scalefactors_json.json").write_text(
+        '{"tissue_hires_scalef": 0.5}'
+    )
+    _, selection = apply_hd_qc_filter(source, ["mt-Nd1"])
+    for mouse in ["FD1", "FD2"]:
+        archive_path = tmp_path / "raw" / mouse / "binned_outputs.tar.gz"
+        archive_path.parent.mkdir(parents=True)
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(fixture, arcname="binned_outputs/square_008um")
+        qc_path = tmp_path / "qc" / mouse / "bin_qc.parquet"
+        qc_path.parent.mkdir(parents=True)
+        saved = selection.iloc[::-1].copy()  # Barcode alignment, not row position.
+        saved.loc["bin-0", "pct_counts_mt"] = 20.000000298023224  # Old float32 result.
+        saved.to_parquet(qc_path)
+    originals = {
+        p: hashlib.sha256(p.read_bytes()).hexdigest()
+        for root in [tmp_path / "raw", tmp_path / "qc"]
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+    args = argparse.Namespace(
+        config="synthetic fixture",
+        all_mice=False,
+        mice=["FD1", "FD2"],
+        source_root=tmp_path / "raw",
+        qc_dir=tmp_path / "qc",
+        output_dir=tmp_path / "filtered",
+        scratch_dir=tmp_path / "scratch",
+    )
+    config = {"repo_root": str(repo_root), "visium_hd": {"bin_size_um": 8}}
+    run_filter = script["run_visium_hd_filter"]
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+    with pytest.raises(ValueError, match="SLURM"):
+        run_filter(config, args)
+    monkeypatch.setenv("SLURM_JOB_ID", "synthetic-fixture-only")
+    assert run_filter(config, args) == 0
+    run = json.loads((args.output_dir / "run.json").read_text())
+    assert run["status"] == "complete"
+    assert run["completed_mice"] == ["FD1", "FD2"]
+    result = ad.read_h5ad(args.output_dir / "FD1" / "filtered_counts.h5ad")
+    assert result.obs_names.tolist() == ["bin-0", "bin-5"]
+    assert (result.X != source.X[[0, 5]]).nnz == 0
+    assert result.uns["spatial"]["FD1"]["scalefactors"]["tissue_hires_scalef"] == 0.5
+    assert result.obs["sample_id"].eq("FD1").all()
+    decisions = pd.read_parquet(args.output_dir / "FD1" / "bin_selection.parquet")
+    assert len(decisions) == source.n_obs
+    summary = pd.read_csv(args.output_dir / "filter_summary.csv")
+    assert summary["bins_retained"].tolist() == [2, 2]
+    assert summary["bins_excluded"].tolist() == [4, 4]
+    assert summary["mt_boundary_corrections"].tolist() == [1, 1]
+    assert len(pd.read_csv(args.output_dir / "FD1" / "failure_summary.csv")) == 11
+    assert not list(args.scratch_dir.iterdir())
+    for path, digest in originals.items():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+    with pytest.raises(FileExistsError, match="Preserve existing"):
+        run_filter(config, args)
+
+    # A changed matrix/review cannot silently create a second 'successful' result.
+    args.output_dir = tmp_path / "mismatch"
+    changed = selection.copy()
+    changed.loc["bin-0", "total_counts"] = 999
+    changed.to_parquet(args.qc_dir / "FD1" / "bin_qc.parquet")
+    with pytest.raises(ValueError, match="differs from the reviewed QC"):
+        run_filter(config, args)
+    assert json.loads((args.output_dir / "run.json").read_text())["status"] == "failed"
+    assert not list(args.output_dir.rglob("filtered_counts.h5ad"))
 
 
 def test_load_reference_genes_returns_nonempty_lines(tmp_path: Path) -> None:

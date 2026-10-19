@@ -23,6 +23,7 @@ visium_hd:
   load_images: true
   use_filtered_matrix: true
 
+# Generic workflow defaults; --visium-hd uses the versioned HD QC filter instead.
 analysis:
   min_counts: 500
   max_counts: 20000

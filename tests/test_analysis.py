@@ -11,6 +11,8 @@ from spatial_transcriptomics.analysis import (
     decompose_hd_qc,
     evaluate_hd_qc,
     prepare_results,
+    select_hd_qc_bins,
+    selected_hd_qc_policy,
 )
 
 
@@ -137,3 +139,27 @@ def test_hd_failure_zero_umis_and_invalid_metrics() -> None:
         decompose_hd_qc(qc.assign(pct_counts_mt=np.nan))
     with pytest.raises(ValueError, match="bins"):
         decompose_hd_qc(qc.iloc[:0])
+
+
+def test_selected_hd_filter_preserves_boundaries_and_has_no_upper_cutoffs() -> None:
+    qc = pd.DataFrame(
+        {
+            "total_counts": [25, 24, 25, 25, 100000],
+            "n_genes_by_counts": [20, 20, 19, 20, 7000],
+            "pct_counts_mt": [20, 20, 20, 20.1, 0],
+            "pct_counts_rp": [99] * 5,
+        },
+        index=["boundary", "umi", "genes", "mt", "high_content"],
+    )
+    original = qc.copy(deep=True)
+    selected = select_hd_qc_bins(qc)
+    assert selected["qc_keep"].tolist() == [True, False, False, False, True]
+    assert selected["fails_umi"].tolist() == [False, True, False, False, False]
+    assert selected["fails_genes"].tolist() == [False, False, True, False, False]
+    assert selected["fails_mt"].tolist() == [False, False, False, True, False]
+    pd.testing.assert_frame_equal(qc, original)
+    assert selected_hd_qc_policy()["anatomical_roi_applied"] is False
+    with pytest.raises(ValueError, match="unique"):
+        select_hd_qc_bins(pd.concat([qc, qc.iloc[:1]]))
+    with pytest.raises(ValueError, match="negative"):
+        select_hd_qc_bins(qc.assign(total_counts=-1))

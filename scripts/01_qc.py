@@ -171,7 +171,7 @@ def run_visium_hd_qc(config: dict[str, object], args: argparse.Namespace) -> int
         metadata_path = sample_dir / "qc_metadata.json"
         stat = archive.stat()
         fingerprint = {
-            "qc_cache_version": 1,
+            "qc_cache_version": 2,
             "archive": str(archive),
             "size": stat.st_size,
             "mtime_ns": stat.st_mtime_ns,
