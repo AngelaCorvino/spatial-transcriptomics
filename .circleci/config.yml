@@ -13,13 +13,13 @@ jobs:
       - checkout
       - run:
           name: Install dev dependencies
-          command: pip install -e .[dev]
+          command: make dev-install
       - run:
           name: Run ruff
-          command: ruff check src tests
+          command: make lint
       - run:
           name: Run mypy
-          command: mypy src tests
+          command: make typecheck
       - run:
           name: Run pytest
-          command: pytest
+          command: make test

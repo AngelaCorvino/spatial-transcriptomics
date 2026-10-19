@@ -38,7 +38,7 @@ git clone https://github.com/angelacorvino/spatial-transcriptomics.git
 cd spatial-transcriptomics
 ```
 
-2. Install runtime dependencies and the package:
+2. Install Python 3.12, then runtime dependencies and the package:
 
 ```bash
 make setup
@@ -66,7 +66,7 @@ git clone https://github.com/angelacorvino/spatial-transcriptomics.git
 cd spatial-transcriptomics
 ```
 
-2. Install runtime + development dependencies:
+2. Install Python 3.12, then runtime + development dependencies:
 
 ```bash
 make dev-install
@@ -75,6 +75,19 @@ make dev-install
 `make dev-install` includes everything in `make setup` and also installs dev
 tools (`pytest`, `ruff`, `mypy`, `jupyterlab`, etc.), so developers should run
 `make dev-install` only.
+
+Local Make commands use `.venv-dev/` and Python 3.12, matching CircleCI.
+The existing `.venv/` is retained; use `make VENV=.venv lab` to open it.
+Development and CI installs share `constraints-dev.txt`, including transitive
+dependencies. These constraints do not apply to the cluster's Conda environment
+or its `pip install -e .` workflow. Python patch versions and platform-specific
+packages may differ between macOS and Linux.
+
+To update dependency pins, install `pip setuptools wheel '.[dev]'` in a fresh
+Python 3.12 environment. Run `make check` with `PYTHON` pointing to that Python, then
+regenerate the pins with `python -m pip freeze --all --exclude-editable` (retain
+the constraints file's header). Verify a constrained install and the CI checks
+before adopting the update.
 
 3. Create your local machine-specific config:
 

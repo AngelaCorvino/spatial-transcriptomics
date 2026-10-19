@@ -169,7 +169,7 @@ def test_hd_spatial_preserves_values_masks_and_affine_geometry() -> None:
         np.testing.assert_allclose(rendered_color(4, 9), [211, 211, 211], atol=1)
         assert mesh.norm is not None
         assert mesh.cmap is not None
-        expected_color = np.array(mesh.cmap(mesh.norm(80)))[:3] * 255
+        expected_color = np.asarray(mesh.cmap(mesh.norm(np.array([80]))))[0, :3] * 255
         np.testing.assert_allclose(rendered_color(4, 8), expected_color, atol=1)
     finally:
         plt.close(fig)
