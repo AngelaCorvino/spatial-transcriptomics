@@ -428,7 +428,7 @@ def normalize_and_log(adata: Any, target_sum: float = 1e4) -> Any:
         adata.layers["counts"] = adata.X.copy()
 
     sc.pp.normalize_total(adata, target_sum=target_sum, inplace=True)
-    sc.pp.log1p(adata, base=2, inplace=True)
+    sc.pp.log1p(adata, base=2)
     return adata
 
 

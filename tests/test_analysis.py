@@ -1,5 +1,10 @@
 """Tests for analysis helpers."""
 
+import argparse
+import hashlib
+import json
+import runpy
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,6 +18,7 @@ from spatial_transcriptomics.analysis import (
     prepare_results,
     select_hd_qc_bins,
     selected_hd_qc_policy,
+    summarize_annotation_markers,
 )
 
 
@@ -163,3 +169,191 @@ def test_selected_hd_filter_preserves_boundaries_and_has_no_upper_cutoffs() -> N
         select_hd_qc_bins(pd.concat([qc, qc.iloc[:1]]))
     with pytest.raises(ValueError, match="negative"):
         select_hd_qc_bins(qc.assign(total_counts=-1))
+
+
+def _annotation_fixture(mouse):
+    """Synthetic three-region tissue with raw counts and an affine spatial grid."""
+    ad = pytest.importorskip("anndata")
+    from scipy import sparse
+
+    from spatial_transcriptomics.data import apply_hd_qc_filter
+
+    rng = np.random.default_rng(42)
+    counts = rng.poisson(1.5, size=(90, 64)).astype(np.float32)
+    counts[:, 0] = 1
+    for group in range(3):
+        counts[group * 30 : (group + 1) * 30, 1 + group * 10 : 11 + group * 10] += 8
+    counts[:, -3:] = 0
+    counts[:30, -3] = 12  # Cd3e
+    counts[30:60, -2] = 12  # Acta1
+    row, col = np.divmod(np.arange(90), 10)
+    names = [f"s_008um_{r:05d}_{c:05d}-1" for r, c in zip(row, col)]
+    genes = ["mt-Nd1"] + [f"Gene{i}" for i in range(60)] + ["Cd3e", "Acta1", "Zero"]
+    adata = ad.AnnData(
+        sparse.csr_matrix(counts),
+        obs=pd.DataFrame({"in_tissue": 1, "sample_id": mouse}, index=names),
+        var=pd.DataFrame(index=genes),
+    )
+    adata.obsm["spatial"] = np.column_stack([100 + 8 * col, 100 + 8 * row]).astype(
+        float
+    )
+    adata.uns["visium_hd"] = {"bin_size_um": 8, "source_path": "synthetic.tar.gz"}
+    return apply_hd_qc_filter(adata, ["mt-Nd1"])
+
+
+def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
+    tmp_path, monkeypatch
+):
+    """Exercise real sparse normalization, clustering, marker ranking and plots."""
+    pytest.importorskip("igraph")
+    import anndata as ad
+    import yaml
+
+    repo = Path(__file__).resolve().parents[1]
+    script = runpy.run_path(str(repo / "scripts/03_integration.py"))
+    input_dir = tmp_path / "filtered"
+    output_dir = tmp_path / "annotation"
+    he_root = tmp_path / "histology"
+    originals = {}
+    summary = []
+    hashes = {}
+    for mouse in ["FD1", "FD2"]:
+        adata, selection = _annotation_fixture(mouse)
+        originals[mouse] = adata.copy()
+        sample_dir = input_dir / mouse
+        sample_dir.mkdir(parents=True)
+        adata.write_h5ad(sample_dir / "filtered_counts.h5ad")
+        selection.iloc[::-1].to_parquet(sample_dir / "bin_selection.parquet")
+        hashes[mouse] = hashlib.sha256(
+            (sample_dir / "filtered_counts.h5ad").read_bytes()
+        ).hexdigest()
+        (he_root / mouse).mkdir(parents=True)
+        (he_root / mouse / "spatial.tar.gz").touch()
+        summary.append(
+            {
+                "mouse_id": mouse,
+                "bins_retained": adata.n_obs,
+                "features_retained": adata.n_vars,
+            }
+        )
+    (input_dir / "run.json").write_text(
+        json.dumps({"status": "complete", "completed_mice": ["FD1", "FD2"]})
+    )
+    pd.DataFrame(summary).to_csv(input_dir / "filter_summary.csv", index=False)
+    marker_path = tmp_path / "markers.yaml"
+    marker_path.write_text(
+        yaml.safe_dump(
+            {
+                "panels": {
+                    "T": ["Cd3e"],
+                    "Muscle": ["Acta1"],
+                    "Coverage": ["Zero", "Absent"],
+                },
+                "spatial_markers": ["Cd3e", "Acta1"],
+            }
+        )
+    )
+    args = argparse.Namespace(
+        all_mice=False,
+        mice=["FD1", "FD2"],
+        input_dir=input_dir,
+        output_dir=output_dir,
+        markers=marker_path,
+        he_source_root=he_root,
+        n_top_genes=40,
+        n_pcs=5,
+        n_neighbors=10,
+        resolution=0.5,
+        seed=0,
+    )
+    config = {"repo_root": str(repo), "data_dir": str(tmp_path / "raw")}
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+    run = script["run_visium_hd_annotation"]
+    with pytest.raises(ValueError, match="SLURM"):
+        run(args, config)
+    monkeypatch.setenv("SLURM_JOB_ID", "synthetic-test")
+    monkeypatch.setitem(
+        run.__globals__,
+        "load_visium_hd_histology",
+        lambda *_: (np.ones((220, 220, 3)), 1.0),
+    )
+    assert run(args, config) == 0
+    manifest = json.loads((output_dir / "run.json").read_text())
+    assert manifest["status"] == "complete"
+    assert manifest["completed_mice"] == ["FD1", "FD2"]
+    assert manifest["batch_correction"] is False
+    for mouse in ["FD1", "FD2"]:
+        sample = output_dir / mouse
+        restored = ad.read_h5ad(sample / "clustered_bins.h5ad")
+        original = originals[mouse]
+        assert (restored.layers["counts"] != original.X).nnz == 0
+        assert restored.obs_names.equals(original.obs_names)
+        assert restored.var_names.equals(original.var_names)
+        np.testing.assert_array_equal(
+            restored.obsm["spatial"], original.obsm["spatial"]
+        )
+        expected = original.X.toarray()
+        expected = np.log2(1 + expected * 10000 / expected.sum(axis=1)[:, None])
+        np.testing.assert_allclose(restored.X.toarray(), expected, rtol=1e-6)
+        assert not restored.var.loc["mt-Nd1", "highly_variable"]
+        assert restored.obs["leiden"].nunique() >= 2
+        assert (
+            restored.uns["tissue_annotation"]["status"] == "clusters_ready_for_review"
+        )
+        assert (
+            hashlib.sha256(
+                (input_dir / mouse / "filtered_counts.h5ad").read_bytes()
+            ).hexdigest()
+            == hashes[mouse]
+        )
+        coverage = pd.read_csv(sample / "marker_coverage.csv").set_index("gene")
+        assert not coverage.loc["Absent", "in_matrix"]
+        assert pd.isna(coverage.loc["Absent", "bins_expressing"])
+        assert coverage.loc["Zero", "in_matrix"]
+        assert coverage.loc["Zero", "bins_expressing"] == 0
+        labels = pd.read_csv(sample / "cluster_annotation.csv")
+        assert labels["bins"].sum() == original.n_obs
+        assert labels["annotation_status"].eq("unreviewed").all()
+        assert labels["tissue_annotation"].isna().all()
+        assert (sample / "cluster_markers.csv").stat().st_size > 0
+        for name in [
+            "clusters.png",
+            "marker_dotplot.png",
+            "marker_spatial.png",
+            "qc_failures_he.png",
+        ]:
+            assert (sample / name).stat().st_size > 1000
+    with pytest.raises(FileExistsError):
+        run(args, config)
+    args.output_dir = tmp_path / "failed"
+    args.mice = ["FD1"]
+    changed = originals["FD1"].copy()
+    changed.X.data /= 2
+    changed.write_h5ad(input_dir / "FD1" / "filtered_counts.h5ad")
+    with pytest.raises(ValueError, match="integer counts"):
+        run(args, config)
+    failed = json.loads((args.output_dir / "run.json").read_text())
+    assert failed["status"] == "failed" and not failed["completed_mice"]
+    assert not (args.output_dir / "FD1" / "clustered_bins.h5ad").exists()
+
+
+def test_annotation_marker_expression_uses_unscaled_values_and_detection():
+    import anndata as ad
+    from scipy import sparse
+
+    data = ad.AnnData(
+        sparse.csr_matrix([[0.0, 2.0], [2.0, 4.0], [6.0, 0.0], [0.0, 0.0]]),
+        obs=pd.DataFrame(
+            {"leiden": pd.Categorical(["0", "0", "1", "1"])}, index=["a", "b", "c", "d"]
+        ),
+        var=pd.DataFrame(index=["A", "B"]),
+    )
+    coverage, expression = summarize_annotation_markers(
+        data, {"panel": ["A", "B", "missing"]}
+    )
+    expression = expression.set_index(["cluster", "gene"])
+    assert expression.loc[("0", "A"), "mean_log_expression"] == 1
+    assert expression.loc[("1", "A"), "mean_log_expression"] == 3
+    assert expression.loc[("0", "A"), "bins_expressing_pct"] == 50
+    assert expression.loc[("1", "B"), "bins_expressing_pct"] == 0
+    assert not coverage.set_index("gene").loc["missing", "in_matrix"]

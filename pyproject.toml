@@ -27,6 +27,7 @@ Homepage = "https://github.com/angelacorvino/spatial-transcriptomics"
 Repository = "https://github.com/angelacorvino/spatial-transcriptomics"
 
 [project.optional-dependencies]
+annotation = ["igraph>=0.11", "scanpy>=1.10"]
 dev = ["pytest", "ruff", "mypy", "ipykernel", "jupyterlab", "pandas-stubs", "types-PyYAML"]
 
 [tool.setuptools]

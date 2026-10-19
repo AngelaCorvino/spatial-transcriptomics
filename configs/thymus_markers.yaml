@@ -1,0 +1,28 @@
+# Exploratory mouse marker panels for reviewing 8-µm bin clusters.
+# Co-expression in a bin does not establish a single-cell identity.
+# Pth-associated and muscle expression require anatomical context.
+# Sources: mouse TECs https://elifesciences.org/articles/69982
+# Mouse thymocytes https://www.nature.com/articles/s41590-023-01584-0
+# Mouse stroma https://www.nature.com/articles/s41586-018-0346-1
+# Stromal lineages https://www.nature.com/articles/s41467-021-21346-6
+# Pth context https://pmc.ncbi.nlm.nih.gov/articles/PMC3009658/
+panels:
+  T lineage: [Cd3d, Cd3e, Trbc1]
+  Immature thymocytes: [Dntt, Rag1, Rag2, Ptcra]
+  CD4 and CD8: [Cd4, Cd8a, Cd8b1]
+  Epithelium: [Epcam, Krt8, Krt18, Foxn1]
+  Cortical epithelium: [Psmb11, Prss16, Ccl25]
+  Medullary epithelium: [Aire, Fezf2, Ccl21a, Krt5]
+  B lineage: [Cd79a, Cd19, Ms4a1]
+  Myeloid: [Lyz2, Csf1r, Adgre1]
+  Endothelium: [Pecam1, Cdh5, Kdr]
+  Fibroblasts: [Col1a1, Col1a2, Dcn, Lum]
+  Smooth muscle: [Acta2, Tagln, Myh11]
+  Pericytes: [Pdgfrb, Rgs5, Cspg4]
+  Skeletal muscle: [Acta1, Myh1, Myh2, Tnnt3]
+  Erythroid: [Hba-a1, Hbb-bs, Alas2]
+  Pth-associated: [Pth, Chga, Gcm2]
+  Proliferation: [Mki67, Top2a]
+spatial_markers:
+  [Cd3e, Rag1, Cd4, Cd8a, Epcam, Psmb11, Aire, Cd79a, Lyz2,
+   Pecam1, Col1a1, Acta2, Acta1, Pth, Mki67]

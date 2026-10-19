@@ -194,17 +194,116 @@ def cluster_and_umap(
     resolution: float = 1.0,
     n_pcs: int = 30,
     n_neighbors: int = 15,
+    *,
+    n_top_genes: int = 2000,
+    exclude_genes: list[str] | None = None,
+    random_state: int = 0,
 ) -> Any:
-    """Run HVG selection, PCA, neighborhood graph, Leiden, and UMAP."""
-    sc = _load_scanpy()
+    """Cluster log-normalized expression; preserve X and count layers.
 
-    sc.pp.highly_variable_genes(adata, inplace=True)
-    sc.pp.scale(adata, inplace=True)
-    sc.tl.pca(adata, n_comps=n_pcs, use_highly_variable=True)
-    sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_pcs, use_rep="X_pca")
-    sc.tl.leiden(adata, resolution=resolution, key_added="leiden", inplace=True)
-    sc.tl.umap(adata, min_dist=0.1, spread=1.0)
+    Scale only a sparse HVG copy for PCA. Gene exclusions affect the embedding,
+    not the stored expression matrix or marker-gene inspection.
+    """
+    import anndata as ad
+
+    sc = _load_scanpy()
+    if adata.n_obs < 4 or min(n_top_genes, n_pcs, n_neighbors) < 2:
+        raise ValueError("Clustering requires >=4 bins and dimensions >=2.")
+    if resolution <= 0:
+        raise ValueError("Clustering resolution must be positive.")
+    sc.pp.highly_variable_genes(adata, n_top_genes=n_top_genes, flavor="seurat")
+    hvg = adata.var["highly_variable"].to_numpy().copy()
+    hvg &= ~adata.var_names.isin(exclude_genes or [])
+    adata.var["highly_variable"] = hvg
+    n_pcs = min(n_pcs, adata.n_obs - 1, int(hvg.sum()) - 1)
+    if n_pcs < 2:
+        raise ValueError("At least three variable genes are needed for PCA.")
+    # Construct only the HVG matrix: do not duplicate raw count layers.
+    embedding = ad.AnnData(adata.X[:, hvg].copy())
+    sc.pp.scale(embedding, zero_center=False, max_value=10)
+    sc.pp.pca(embedding, n_comps=n_pcs, svd_solver="arpack", random_state=random_state)
+    adata.obsm["X_pca"] = embedding.obsm["X_pca"]
+    adata.varm["PCs"] = np.zeros((adata.n_vars, n_pcs), dtype=np.float32)
+    adata.varm["PCs"][hvg] = embedding.varm["PCs"]
+    adata.uns["pca"] = embedding.uns["pca"]
+    del embedding
+    sc.pp.neighbors(
+        adata,
+        n_neighbors=min(n_neighbors, adata.n_obs - 1),
+        n_pcs=n_pcs,
+        use_rep="X_pca",
+        random_state=random_state,
+    )
+    sc.tl.leiden(
+        adata,
+        resolution=resolution,
+        key_added="leiden",
+        flavor="igraph",
+        directed=False,
+        n_iterations=2,
+        random_state=random_state,
+    )
+    sc.tl.umap(adata, min_dist=0.1, spread=1.0, random_state=random_state)
     return adata
+
+
+def summarize_annotation_markers(adata: Any, panels: dict[str, list[str]]):
+    """Report marker coverage and cluster expression without assigning identities."""
+    coverage = []
+    expression = []
+    clusters = adata.obs["leiden"].cat.categories
+    for panel, genes in panels.items():
+        for gene in genes:
+            present = gene in adata.var_names
+            values = np.array([], dtype=float)
+            if present:
+                matrix = adata[:, gene].X
+                values = np.asarray(
+                    matrix.toarray() if hasattr(matrix, "toarray") else matrix
+                ).ravel()
+            coverage.append(
+                {
+                    "panel": panel,
+                    "gene": gene,
+                    "in_matrix": present,
+                    "bins_expressing": int((values > 0).sum()) if present else np.nan,
+                }
+            )
+            if not present:
+                continue
+            for cluster in clusters:
+                selected = values[adata.obs["leiden"].eq(cluster).to_numpy()]
+                expression.append(
+                    {
+                        "cluster": str(cluster),
+                        "panel": panel,
+                        "gene": gene,
+                        "mean_log_expression": float(selected.mean()),
+                        "bins_expressing_pct": float(100 * (selected > 0).mean()),
+                    }
+                )
+    return pd.DataFrame(coverage), pd.DataFrame(expression)
+
+
+def rank_annotation_markers(adata: Any, n_genes: int = 50) -> pd.DataFrame:
+    """Descriptive cluster-vs-rest markers, not treatment-level inference."""
+    sc = _load_scanpy()
+    sizes = adata.obs["leiden"].value_counts()
+    groups = [str(group) for group, size in sizes.items() if 1 < size < adata.n_obs]
+    columns = ["group", "names", "scores", "logfoldchanges", "pvals", "pvals_adj"]
+    if len(sizes) < 2 or not groups:
+        return pd.DataFrame(columns=columns)
+    sc.tl.rank_genes_groups(
+        adata,
+        "leiden",
+        groups=groups,
+        reference="rest",
+        use_raw=False,
+        method="t-test_overestim_var",
+        n_genes=min(n_genes, adata.n_vars),
+        pts=True,
+    )
+    return sc.get.rank_genes_groups_df(adata, group=None)
 
 
 def compute_statistics(adata: Any) -> dict[str, int | float]:

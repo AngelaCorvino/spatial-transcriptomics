@@ -155,8 +155,10 @@ def plot_hd_qc_histology(
     image: np.ndarray,
     scale: float,
     output_dir: Path,
+    *,
+    applied: bool = False,
 ) -> None:
-    """Overlay provisional moderate QC failures on registered H&E; retain all bins."""
+    """Overlay candidate or verified applied QC failures on registered H&E."""
     evaluate_hd_qc(qc)
     if not np.isfinite(scale) or scale <= 0:
         raise ValueError("The H&E scale factor must be finite and positive.")
@@ -167,6 +169,10 @@ def plot_hd_qc_histology(
         qc["n_genes_by_counts"] < min_genes
     )
     high_mt = qc["pct_counts_mt"] > max_mt
+    if applied:
+        keep = ~(low_content | high_mt)
+        if "qc_keep" not in qc or not np.array_equal(qc["qc_keep"], keep):
+            raise ValueError("Applied QC flags do not match the selected thresholds.")
     groups = [
         ("MT-only", high_mt & ~low_content, "#d73027"),
         ("Low-content only", low_content & ~high_mt, "#0072b2"),
@@ -195,14 +201,138 @@ def plot_hd_qc_histology(
             ax.set_xlim(-0.5, width - 0.5)
             ax.set_ylim(height - 0.5, -0.5)
         fig.suptitle(
-            f"{mouse_id}: {candidate} — provisional H&E review\n"
+            f"{mouse_id}: "
+            + ("Applied QC v1" if applied else f"{candidate} — provisional H&E review")
+            + "\n"
             f"Low content: UMI < {min_counts} or genes < {min_genes}; "
             f"high MT: > {max_mt:g}%\n"
-            "Percentages use all input bins; no additional filtering"
+            + (
+                "Percentages use all input bins"
+                if applied
+                else "Percentages use all input bins; no additional filtering"
+            )
         )
         _save_qc_figure(fig, output_dir / "qc_failures_he.png")
     finally:
         plt.close(fig)
+
+
+def plot_hd_annotation(
+    adata,
+    mouse_id,
+    panels,
+    spatial_markers,
+    output_dir,
+    *,
+    image=None,
+    scale=1.0,
+):
+    """Save cluster and marker views; use the same cluster colours in both spaces."""
+    import scanpy as sc
+    from matplotlib.patches import Patch
+
+    labels = adata.obs["leiden"]
+    categories = labels.cat.categories
+    codes = labels.cat.codes.to_numpy()
+    colors = plt.get_cmap(
+        "tab20" if len(categories) <= 20 else "turbo", len(categories)
+    )(range(len(categories)))
+    cmap = ListedColormap(colors)
+    qc = pd.DataFrame(
+        adata.obsm["spatial"] * scale, index=adata.obs_names, columns=["x", "y"]
+    )
+    keep = np.ones(adata.n_obs, dtype=bool)
+
+    def spatial_panel(ax, values):
+        if image is not None:
+            ax.imshow(image, origin="upper")
+        mesh = plot_hd_spatial(ax, qc, keep, values, show_excluded=False)
+        if image is not None:
+            mesh.set_alpha(0.7)
+            ax.set_xlim(-0.5, image.shape[1] - 0.5)
+            ax.set_ylim(image.shape[0] - 0.5, -0.5)
+        return mesh
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7), constrained_layout=True)
+    umap = adata.obsm["X_umap"]
+    axes[0].scatter(
+        umap[:, 0],
+        umap[:, 1],
+        c=codes,
+        cmap=cmap,
+        vmin=-0.5,
+        vmax=len(categories) - 0.5,
+        s=min(12, 120000 / adata.n_obs),
+        linewidths=0,
+        rasterized=True,
+    )
+    axes[0].set(title="UMAP", xlabel="UMAP 1", ylabel="UMAP 2")
+    mesh = spatial_panel(axes[1], codes)
+    mesh.set_cmap(cmap)
+    mesh.set_clim(-0.5, len(categories) - 0.5)
+    axes[1].set_title("Clusters on H&E" if image is not None else "Spatial clusters")
+    axes[1].legend(
+        handles=[
+            Patch(color=color, label=label) for color, label in zip(colors, categories)
+        ],
+        title="Cluster",
+        loc="upper left",
+        bbox_to_anchor=(1, 1),
+        fontsize=8,
+    )
+    fig.suptitle(f"{mouse_id}: clusters of retained 8 µm bins")
+    _save_qc_figure(fig, output_dir / "clusters.png")
+
+    available = {
+        panel: [gene for gene in genes if gene in adata.var_names]
+        for panel, genes in panels.items()
+    }
+    available = {panel: genes for panel, genes in available.items() if genes}
+    if available:
+        dotplot = sc.pl.dotplot(
+            adata,
+            available,
+            groupby="leiden",
+            use_raw=False,
+            standard_scale="var",
+            colorbar_title="Mean log expression\nscaled per gene",
+            size_title="Bins expressing (%)",
+            return_fig=True,
+            show=False,
+            figsize=(
+                max(12, sum(map(len, available.values())) * 0.32),
+                max(5, len(categories) * 0.3 + 2),
+            ),
+        )
+        dotplot.make_figure()
+        # Place the title above the rotated marker-panel labels.
+        dotplot.fig.canvas.draw()
+        top = dotplot.fig.get_tightbbox(dotplot.fig.canvas.get_renderer()).y1
+        dotplot.fig.suptitle(
+            f"{mouse_id}: marker expression by bin cluster",
+            y=(top + 0.12) / dotplot.fig.get_figheight(),
+            va="bottom",
+        )
+        _save_qc_figure(dotplot.fig, output_dir / "marker_dotplot.png")
+
+    genes = [gene for gene in spatial_markers if gene in adata.var_names]
+    if genes:
+        nrows = (len(genes) + 2) // 3
+        fig, axes = plt.subplots(
+            nrows, 3, figsize=(15, 4.5 * nrows), squeeze=False, constrained_layout=True
+        )
+        for ax, gene in zip(axes.flat, genes):
+            values = adata[:, gene].X
+            values = np.asarray(
+                values.toarray() if hasattr(values, "toarray") else values
+            ).ravel()
+            mesh = spatial_panel(ax, values)
+            ax.set_title(gene)
+            fig.colorbar(mesh, ax=ax, shrink=0.65)
+        for ax in list(axes.flat)[len(genes) :]:
+            ax.set_axis_off()
+        fig.suptitle(f"{mouse_id}: marker expression · log2(1 + counts per 10,000)")
+        _save_qc_figure(fig, output_dir / "marker_spatial.png")
 
 
 def plot_hd_qc_comparison(

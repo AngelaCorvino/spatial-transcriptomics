@@ -193,6 +193,53 @@ Outputs are under the configured `paths.preprocess_output`, in
 Existing output directories are preserved. For a retry, supply an unused
 `--output-dir`; `--source-root` and `--qc-dir` can locate relocated inputs.
 
+### Tissue annotation after Visium HD filtering
+
+The first pass identifies broad cell types from cluster markers and H&E. Published
+[Visium HD work](https://www.nature.com/articles/s41588-025-02193-3) used 8-µm
+bins and marker-based annotation to identify ten broad cell types.
+
+The existing clustering script accepts the completed QC v1 matrices. It processes
+each mouse independently: normalize to 10,000 counts per bin, log2-transform,
+select 2,000 variable genes, and run PCA, neighbours, Leiden (resolution 0.5),
+and UMAP. MT genes are excluded from the embedding; all retained bins, gene
+features, and original counts are preserved. No batch correction is applied.
+
+Install the clustering extra in the cluster environment, then submit from the
+repository root:
+
+```bash
+conda activate /home/acorvino/.envs/python-env
+python -m pip install -e '.[annotation]'
+mkdir -p logs
+sbatch cluster/slurm_03_integration.sh --visium-hd --all-mice \
+  --he-source-root /oak/stanford/groups/dirbas/raw/Dirbas_Processed_Visium_HD_Data
+```
+
+Outputs use `integration/visium_hd_008um/FD1` through `FD12`:
+
+- `clustered_bins.h5ad`: log-normalized expression, raw counts in `layers['counts']`,
+  spatial coordinates, PCA, graph, UMAP and sample-specific cluster IDs.
+- `clusters.png`, `marker_dotplot.png`, `marker_spatial.png`: annotation views.
+- `qc_failures_he.png`: actual QC v1 failures on H&E, when `--he-source-root` is given.
+- `marker_coverage.csv`, `marker_expression.csv`, `cluster_markers.csv`: marker evidence.
+- `cluster_annotation.csv`: cluster sizes, QC metrics and top genes, with broad
+  cell-type/tissue labels to complete after reviewing the plots and markers.
+
+The root contains `annotation_summary.csv` and `run.json`. Download the PNG/CSV
+files for review; matrices can remain on the cluster. The workflow refuses to
+overwrite an existing output directory; use `--output-dir` for a separate rerun.
+
+[Marker panels](configs/thymus_markers.yaml) cover thymic and surrounding tissue.
+Missing genes are recorded separately from present genes with no detected counts.
+Assign broad labels using multiple markers, spatial location and H&E; retain a
+mixed or uncertain label where needed. Cluster IDs differ between mice.
+Marker ranks describe cluster-vs-rest expression, not treatment effects.
+
+Implementation follows [Scanpy's clustering workflow](https://scanpy.scverse.org/en/stable/tutorials/basics/clustering.html).
+Use `--mice FD5 FD9` for a subset; resolution and embedding dimensions can be
+changed through the CLI without changing the QC filter.
+
 Local and cluster configs differ in environment settings, output directories,
 and cluster-specific submission options, while the analysis code remains shared
 in `src/spatial_transcriptomics`.
