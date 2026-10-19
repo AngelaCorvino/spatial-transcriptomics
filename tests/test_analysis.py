@@ -207,7 +207,6 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
     """Exercise real sparse normalization, clustering, marker ranking and plots."""
     pytest.importorskip("igraph")
     import anndata as ad
-    import yaml
 
     repo = Path(__file__).resolve().parents[1]
     script = runpy.run_path(str(repo / "scripts/03_integration.py"))
@@ -240,19 +239,18 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
         json.dumps({"status": "complete", "completed_mice": ["FD1", "FD2"]})
     )
     pd.DataFrame(summary).to_csv(input_dir / "filter_summary.csv", index=False)
-    marker_path = tmp_path / "markers.yaml"
-    marker_path.write_text(
-        yaml.safe_dump(
-            {
-                "panels": {
-                    "T": ["Cd3e"],
-                    "Muscle": ["Acta1"],
-                    "Coverage": ["Zero", "Absent"],
-                },
-                "spatial_markers": ["Cd3e", "Acta1"],
-            }
-        )
+    marker_path = tmp_path / "markers.csv"
+    marker_table = pd.DataFrame(
+        [
+            ("T", "Cd3e", "synthetic"),
+            ("Muscle", "Acta1", "synthetic"),
+            ("Coverage", "Zero", "synthetic"),
+            ("Coverage", "Absent", "synthetic"),
+            ("Shared", "Cd3e", "synthetic"),
+        ],
+        columns=["panel", "gene", "source"],
     )
+    marker_table.to_csv(marker_path, index=False)
     args = argparse.Namespace(
         all_mice=False,
         mice=["FD1", "FD2"],
@@ -282,6 +280,13 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
     assert manifest["status"] == "complete"
     assert manifest["completed_mice"] == ["FD1", "FD2"]
     assert manifest["batch_correction"] is False
+    assert manifest["markers"]["table"] == marker_table.to_dict("records")
+    assert (
+        manifest["markers"]["sha256"]
+        == hashlib.sha256(marker_path.read_bytes()).hexdigest()
+    )
+    summary = pd.read_csv(output_dir / "annotation_summary.csv")
+    assert summary["marker_genes_present"].eq(3).all()
     for mouse in ["FD1", "FD2"]:
         sample = output_dir / mouse
         restored = ad.read_h5ad(sample / "clustered_bins.h5ad")
@@ -335,6 +340,30 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
     failed = json.loads((args.output_dir / "run.json").read_text())
     assert failed["status"] == "failed" and not failed["completed_mice"]
     assert not (args.output_dir / "FD1" / "clustered_bins.h5ad").exists()
+
+
+@pytest.mark.parametrize(
+    "contents, message",
+    [
+        ("panel,gene\nT,Cd3e\n", "columns"),
+        ("panel,gene,source\n", "no empty fields"),
+        ("panel,gene,source\nT, ,reference\n", "no empty fields"),
+        ("panel,gene,source\nT,Cd3e,\n", "no empty fields"),
+        (
+            "panel,gene,source\nT,Cd3e,reference\nT,Cd3e,other reference\n",
+            "unique within",
+        ),
+    ],
+)
+def test_annotation_marker_csv_rejects_incomplete_or_duplicate_entries(
+    tmp_path, contents, message
+):
+    repo = Path(__file__).resolve().parents[1]
+    script = runpy.run_path(str(repo / "scripts/03_integration.py"))
+    marker_path = tmp_path / "markers.csv"
+    marker_path.write_text(contents)
+    with pytest.raises(ValueError, match=message):
+        script["load_annotation_markers"](marker_path)
 
 
 def test_annotation_marker_expression_uses_unscaled_values_and_detection():

@@ -1,0 +1,159 @@
+panel,gene,source
+T_cell,Cd3e,jpa_mouse_markers.csv: T_cell
+T_cell,Cd3d,mouse_lung_markers.csv: CD8_T
+T_cell,Cd3g,mouse_lung_markers.csv: gd_T
+T_cell,Trbc1,mouse_lung_markers.csv: Treg; https://www.nature.com/articles/s41590-023-01584-0
+T_cell,Trbc2,mouse_lung_markers.csv: CD4_T
+T_cell,Il7r,jpa_mouse_markers.csv: T_cell
+Immature_thymocytes,Rag1,mouse_lung_markers.csv: CD4_CD8_T
+Immature_thymocytes,Rag2,https://www.nature.com/articles/s41590-023-01584-0
+Immature_thymocytes,Ptcra,https://pmc.ncbi.nlm.nih.gov/articles/PMC6013397/
+Immature_thymocytes,Dntt,https://pmc.ncbi.nlm.nih.gov/articles/PMC12915102/
+Immature_thymocytes,Ccr9,mouse_lung_markers.csv: CD4_CD8_T
+CD4_T,Cd4,mouse_lung_markers.csv: CD4_T
+CD4_T,Zbtb7b,https://www.nature.com/articles/s41590-023-01584-0
+CD4_T,Gata3,https://www.nature.com/articles/s41590-023-01584-0
+CD4_T,Il7r,mouse_lung_markers.csv: CD4_T
+CD4_T,Cd3d,mouse_lung_markers.csv: CD4_T
+CD4_T,Trbc2,mouse_lung_markers.csv: CD4_T
+CD8_T,Cd8a,mouse_lung_markers.csv: CD8_T
+CD8_T,Cd8b1,mouse_lung_markers.csv: CD4_CD8_T
+CD8_T,Runx3,https://www.nature.com/articles/s41590-023-01584-0
+CD8_T,Cd3d,mouse_lung_markers.csv: CD8_T
+CD8_T,Cd3e,jpa_mouse_markers.csv: T_cell
+CD8_T,Trbc1,https://www.nature.com/articles/s41590-023-01584-0
+Treg,Foxp3,https://www.nature.com/articles/s41590-023-01584-0
+Treg,Ctla4,mouse_lung_markers.csv: Treg
+Treg,Ikzf2,mouse_lung_markers.csv: Treg
+Treg,Il2ra,https://pmc.ncbi.nlm.nih.gov/articles/PMC11324892/
+Treg,Tnfrsf18,https://pmc.ncbi.nlm.nih.gov/articles/PMC11324892/
+gd_T,Trdc,mouse_lung_markers.csv: gd_T
+gd_T,Trgc1,https://www.ncbi.nlm.nih.gov/gene/107573
+gd_T,Cd3d,mouse_lung_markers.csv: CD8_T
+gd_T,Cd3e,jpa_mouse_markers.csv: T_cell
+gd_T,Cd3g,mouse_lung_markers.csv: gd_T
+NK,Nkg7,jpa_mouse_markers.csv: NK_cell
+NK,Klrd1,jpa_mouse_markers.csv: NK_cell
+NK,Ncr1,https://www.nature.com/articles/s41590-023-01584-0
+NK,Gzma,jpa_mouse_markers.csv: NK_cell
+NK,Gzmb,jpa_mouse_markers.csv: NK_cell
+NK,Xcl1,mouse_lung_markers.csv: NK
+B,Cd79a,jpa_mouse_markers.csv: B_cell
+B,Cd19,jpa_mouse_markers.csv: B_cell
+B,Ms4a1,jpa_mouse_markers.csv: B_cell
+B,Cd79b,mouse_lung_markers.csv: B
+B,Bank1,jpa_mouse_markers.csv: B_cell
+B,Ighm,mouse_lung_markers.csv: B
+Plasma_cell,Mzb1,jpa_mouse_markers.csv: Plasma_cell
+Plasma_cell,Jchain,jpa_mouse_markers.csv: Plasma_cell
+Plasma_cell,Sdc1,jpa_mouse_markers.csv: Plasma_cell
+Plasma_cell,Xbp1,https://pmc.ncbi.nlm.nih.gov/articles/PMC11358282/
+Plasma_cell,Prdm1,https://pmc.ncbi.nlm.nih.gov/articles/PMC11358282/
+Mono,Lyz2,mouse_lung_markers.csv: Mono
+Mono,Lst1,mouse_lung_markers.csv: Mono
+Mono,Fcer1g,mouse_lung_markers.csv: Mono
+Mono,Cd14,jpa_mouse_markers.csv: Monocyte
+Mono,Ms4a7,jpa_mouse_markers.csv: Monocyte
+Mono,Cybb,mouse_lung_markers.csv: Mono
+Macrophage,C1qa,jpa_mouse_markers.csv: Macrophage
+Macrophage,C1qb,jpa_mouse_markers.csv: Macrophage
+Macrophage,C1qc,jpa_mouse_markers.csv: Macrophage
+Macrophage,Cd68,jpa_mouse_markers.csv: Macrophage
+Macrophage,Cd163,jpa_mouse_markers.csv: Macrophage
+Macrophage,Apoe,mouse_lung_markers.csv: Int_Mf
+cDC,Xcr1,jpa_mouse_markers.csv: cDC
+cDC,Clec9a,jpa_mouse_markers.csv: cDC
+cDC,Flt3,mouse_lung_markers.csv: DC2
+cDC,Itgax,jpa_mouse_markers.csv: cDC
+cDC,Fcer1a,jpa_mouse_markers.csv: cDC
+cDC,Clec10a,jpa_mouse_markers.csv: cDC
+pDC,Siglech,https://www.nature.com/articles/s41467-020-16081-3
+pDC,Tcf4,jpa_mouse_markers.csv: pDC
+pDC,Bst2,https://www.nature.com/articles/s41467-020-16081-3
+pDC,Irf8,jpa_mouse_markers.csv: pDC
+pDC,Bcl11a,jpa_mouse_markers.csv: pDC
+pDC,Tlr9,jpa_mouse_markers.csv: pDC
+Neutrophil,Csf3r,jpa_mouse_markers.csv: Neutrophil
+Neutrophil,S100a8,mouse_lung_markers.csv: Neut1
+Neutrophil,S100a9,mouse_lung_markers.csv: Neut1
+Neutrophil,Camp,mouse_lung_markers.csv: Neut2
+Neutrophil,Ngp,mouse_lung_markers.csv: Neut2
+Neutrophil,Ltf,mouse_lung_markers.csv: Neut2
+Mast_cell,Ms4a2,jpa_mouse_markers.csv: Mast_cell
+Mast_cell,Cpa3,jpa_mouse_markers.csv: Mast_cell
+Mast_cell,Tpsb2,jpa_mouse_markers.csv: Mast_cell
+Mast_cell,Ctsg,jpa_mouse_markers.csv: Mast_cell
+Mast_cell,Hdc,mouse_lung_markers.csv: Mast_Ba2
+RBC,Hba-a1,jpa_mouse_markers.csv: RBC
+RBC,Hba-a2,jpa_mouse_markers.csv: RBC
+RBC,Hbb-bs,https://www.nature.com/articles/s41590-023-01584-0
+RBC,Alas2,https://pmc.ncbi.nlm.nih.gov/articles/PMC2943437/
+RBC,Slc4a1,https://pmc.ncbi.nlm.nih.gov/articles/PMC2943437/
+Epithelial,Epcam,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+Epithelial,Krt8,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+Epithelial,Krt18,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+Epithelial,Foxn1,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+Epithelial,Krt5,https://elifesciences.org/articles/69982
+Epithelial,Krt14,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+cTEC,Psmb11,https://elifesciences.org/articles/69982
+cTEC,Prss16,https://elifesciences.org/articles/69982
+cTEC,Ccl25,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+cTEC,Dll4,https://pmc.ncbi.nlm.nih.gov/articles/PMC9772400/
+cTEC,Ly75,https://pmc.ncbi.nlm.nih.gov/articles/PMC9772400/
+cTEC,Enpep,https://pmc.ncbi.nlm.nih.gov/articles/PMC9772400/
+mTEC,Aire,https://elifesciences.org/articles/69982
+mTEC,Fezf2,https://elifesciences.org/articles/69982
+mTEC,Ccl21a,https://elifesciences.org/articles/69982
+mTEC,Krt5,https://elifesciences.org/articles/69982
+mTEC,Krt14,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+mTEC,Cldn4,https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+EC,Pecam1,jpa_mouse_markers.csv: EC
+EC,Cdh5,jpa_mouse_markers.csv: EC
+EC,Kdr,mouse_lung_markers.csv: aCap
+EC,Vwf,jpa_mouse_markers.csv: EC
+EC,Ptprb,jpa_mouse_markers.csv: EC
+EC,Ramp2,jpa_mouse_markers.csv: EC
+Fibroblast,Col1a1,jpa_mouse_markers.csv: Fibroblast
+Fibroblast,Col1a2,jpa_mouse_markers.csv: Fibroblast
+Fibroblast,Dcn,jpa_mouse_markers.csv: Fibroblast
+Fibroblast,Lum,jpa_mouse_markers.csv: Fibroblast
+Fibroblast,Col3a1,jpa_mouse_markers.csv: Fibroblast
+Fibroblast,Dpt,mouse_lung_markers.csv: Col13a1_fibroblast
+Pericyte,Pdgfrb,jpa_mouse_markers.csv: Pericyte
+Pericyte,Rgs5,jpa_mouse_markers.csv: Pericyte
+Pericyte,Cspg4,jpa_mouse_markers.csv: Pericyte
+Pericyte,Mcam,jpa_mouse_markers.csv: Pericyte
+Pericyte,Notch3,jpa_mouse_markers.csv: Pericyte
+Pericyte,Abcc9,jpa_mouse_markers.csv: Pericyte
+Smooth_muscle,Acta2,mouse_lung_markers.csv: Pericyte1
+Smooth_muscle,Tagln,mouse_lung_markers.csv: Pericyte1
+Smooth_muscle,Myh11,mouse_lung_markers.csv: Pericyte1
+Smooth_muscle,Myl9,mouse_lung_markers.csv: Pericyte1
+Smooth_muscle,Cnn1,mouse_lung_markers.csv: Fibromyo_SMC
+Smooth_muscle,Actg2,mouse_lung_markers.csv: Fibromyo_SMC
+Skeletal_muscle,Acta1,https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+Skeletal_muscle,Myh1,https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+Skeletal_muscle,Tnnt3,https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+Skeletal_muscle,Myh4,https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+Skeletal_muscle,Ckm,https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+Skeletal_muscle,Ttn,https://pmc.ncbi.nlm.nih.gov/articles/PMC7733460/
+Mesothelial,Msln,jpa_mouse_markers.csv: Mesothelial
+Mesothelial,Wt1,jpa_mouse_markers.csv: Mesothelial
+Mesothelial,Calb2,jpa_mouse_markers.csv: Mesothelial
+Mesothelial,Krt6a,jpa_mouse_markers.csv: Mesothelial
+Mesothelial,Pdpn,jpa_mouse_markers.csv: Mesothelial
+Adipocyte,Adipoq,jpa_mouse_markers.csv: Adipocyte
+Adipocyte,Fabp4,jpa_mouse_markers.csv: Adipocyte
+Adipocyte,Lpl,jpa_mouse_markers.csv: Adipocyte
+Adipocyte,Plin1,https://pmc.ncbi.nlm.nih.gov/articles/PMC8803606/
+Adipocyte,Cidec,https://pmc.ncbi.nlm.nih.gov/articles/PMC8803606/
+Pth_associated,Pth,https://pmc.ncbi.nlm.nih.gov/articles/PMC3009658/
+Pth_associated,Gcm2,https://pmc.ncbi.nlm.nih.gov/articles/PMC3009658/
+Pth_associated,Casr,https://pmc.ncbi.nlm.nih.gov/articles/PMC10334775/
+Pth_associated,Gata3,https://pmc.ncbi.nlm.nih.gov/articles/PMC10334775/
+Pth_associated,Mafb,https://pmc.ncbi.nlm.nih.gov/articles/PMC10334775/
+Proliferation,Mki67,jpa_mouse_markers.csv: Proliferation
+Proliferation,Top2a,https://www.nature.com/articles/s41590-023-01584-0
+Proliferation,Pcna,jpa_mouse_markers.csv: Proliferation
+Proliferation,Mcm2,jpa_mouse_markers.csv: Proliferation
+Proliferation,Cdk1,https://www.nature.com/articles/s41467-020-20073-8

@@ -220,7 +220,7 @@ Outputs use `integration/visium_hd_008um/FD1` through `FD12`:
 
 - `clustered_bins.h5ad`: log-normalized expression, raw counts in `layers['counts']`,
   spatial coordinates, PCA, graph, UMAP and sample-specific cluster IDs.
-- `clusters.png`, `marker_dotplot.png`, `marker_spatial.png`: annotation views.
+- `clusters.png`, `marker_dotplot*.png`, `marker_spatial.png`: annotation views.
 - `qc_failures_he.png`: actual QC v1 failures on H&E, when `--he-source-root` is given.
 - `marker_coverage.csv`, `marker_expression.csv`, `cluster_markers.csv`: marker evidence.
 - `cluster_annotation.csv`: cluster sizes, QC metrics and top genes, with broad
@@ -230,10 +230,16 @@ The root contains `annotation_summary.csv` and `run.json`. Download the PNG/CSV
 files for review; matrices can remain on the cluster. The workflow refuses to
 overwrite an existing output directory; use `--output-dir` for a separate rerun.
 
-[Marker panels](configs/thymus_markers.yaml) combine the supplied lung marker tables
-with mouse thymus references. Version `thymus_annotation_markers_v1` records each
-gene's source, source-table hashes and interpretation notes; the complete selection
-is captured in `run.json`. The panel guides annotation plots, not clustering.
+[The marker CSV](configs/thymus_markers.csv) contains 5–6 genes per group, with
+columns `panel`, `gene` and `source`. Sources identify the original column in the
+supplied lung marker tables or link to a mouse reference. The groups include
+cell types and expression programs such as proliferation. Matching categories use
+the exact `mouse_lung_markers.csv` labels; broad categories absent there use
+`jpa_mouse_markers.csv` labels. Additional groups use names such as `cTEC`, `mTEC`
+and `Immature_thymocytes`. The table and its SHA-256
+are captured in `run.json`. The panel guides annotation plots, not clustering.
+Dotplots show up to nine groups per figure; spatial maps use the first gene in
+each group. Use `--markers path/to/panel.csv` to supply another table.
 Missing genes are recorded separately from present genes with no detected counts.
 Assign broad labels using multiple markers, spatial location and H&E; retain a
 mixed or uncertain label where needed. Cluster IDs differ between mice.

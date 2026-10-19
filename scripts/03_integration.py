@@ -15,7 +15,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yaml
 
 from spatial_transcriptomics.analysis import (
     HD_QC_FILTER_VERSION,
@@ -59,7 +58,9 @@ def parse_args() -> argparse.Namespace:
         "--input-dir", type=Path, help="Parent of FD*/filtered_counts.h5ad."
     )
     parser.add_argument("--output-dir", type=Path, help="An unused output directory.")
-    parser.add_argument("--markers", type=Path, help="Marker-panel YAML file.")
+    parser.add_argument(
+        "--markers", type=Path, help="Marker CSV with panel, gene and source columns."
+    )
     parser.add_argument(
         "--he-source-root",
         type=Path,
@@ -71,6 +72,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resolution", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
+
+
+def load_annotation_markers(path):
+    """Read the marker table, preserving panel and gene order for plotting."""
+    table = pd.read_csv(path, dtype=str, keep_default_na=False)
+    columns = ["panel", "gene", "source"]
+    if list(table.columns) != columns:
+        raise ValueError("Marker CSV must have columns: panel, gene, source.")
+    for column in columns:
+        table[column] = table[column].str.strip()
+    if table.empty or table.eq("").any().any():
+        raise ValueError("Marker CSV must contain rows with no empty fields.")
+    if table.duplicated(["panel", "gene"]).any():
+        raise ValueError("Gene symbols must be unique within each marker panel.")
+    panels = table.groupby("panel", sort=False)["gene"].agg(list).to_dict()
+    return {
+        "panels": panels,
+        "spatial_markers": list(dict.fromkeys(genes[0] for genes in panels.values())),
+        "table": table.to_dict("records"),
+        "path": str(path.resolve()),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
 
 
 def validate_filtered_input(adata, mouse, expected):
@@ -199,7 +222,9 @@ def cluster_hd_mouse(
         "features": adata.n_vars,
         "clusters": len(summary),
         "hvg_genes": int(adata.var["highly_variable"].sum()),
-        "marker_genes_present": int(coverage["in_matrix"].sum()),
+        "marker_genes_present": int(
+            coverage.loc[coverage["in_matrix"], "gene"].nunique()
+        ),
         "annotation_status": "unreviewed",
         "he_overlays": image is not None,
     }
@@ -257,18 +282,8 @@ def run_visium_hd_annotation(args, config):
     expected = pd.read_csv(input_dir / "filter_summary.csv").set_index("mouse_id")
     if not expected.index.is_unique or not set(mice).issubset(expected.index):
         raise ValueError("Expected one filter summary row per requested mouse.")
-    marker_path = args.markers or repo / "configs/thymus_markers.yaml"
-    markers = yaml.safe_load(marker_path.read_text())
-    if not isinstance(markers.get("panels"), dict) or not markers["panels"]:
-        raise ValueError("Marker configuration must contain a nonempty panels mapping.")
-    for genes in [*markers["panels"].values(), markers["spatial_markers"]]:
-        if (
-            not isinstance(genes, list)
-            or not genes
-            or not all(isinstance(gene, str) for gene in genes)
-            or len(genes) != len(set(genes))
-        ):
-            raise ValueError("Each marker panel must be a list of unique gene symbols.")
+    marker_path = args.markers or repo / "configs/thymus_markers.csv"
+    markers = load_annotation_markers(marker_path)
     he_root = args.he_source_root.resolve() if args.he_source_root else None
     for mouse in mice:
         required = [input_dir / mouse / "filtered_counts.h5ad"]

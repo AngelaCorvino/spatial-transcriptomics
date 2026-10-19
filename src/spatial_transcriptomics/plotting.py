@@ -288,10 +288,14 @@ def plot_hd_annotation(
         for panel, genes in panels.items()
     }
     available = {panel: genes for panel, genes in available.items() if genes}
-    if available:
+    # Keep expanded panels readable without splitting a panel across figures.
+    panel_items = list(available.items())
+    for start in range(0, len(panel_items), 9):
+        page = dict(panel_items[start : start + 9])
+        page_number = start // 9 + 1
         dotplot = sc.pl.dotplot(
             adata,
-            available,
+            page,
             groupby="leiden",
             use_raw=False,
             standard_scale="var",
@@ -300,7 +304,7 @@ def plot_hd_annotation(
             return_fig=True,
             show=False,
             figsize=(
-                max(12, sum(map(len, available.values())) * 0.32),
+                max(12, sum(map(len, page.values())) * 0.32),
                 max(5, len(categories) * 0.3 + 2),
             ),
         )
@@ -308,12 +312,16 @@ def plot_hd_annotation(
         # Place the title above the rotated marker-panel labels.
         dotplot.fig.canvas.draw()
         top = dotplot.fig.get_tightbbox(dotplot.fig.canvas.get_renderer()).y1
+        title = f"{mouse_id}: marker expression by bin cluster"
+        if len(panel_items) > 9:
+            title += f" · page {page_number}"
         dotplot.fig.suptitle(
-            f"{mouse_id}: marker expression by bin cluster",
+            title,
             y=(top + 0.12) / dotplot.fig.get_figheight(),
             va="bottom",
         )
-        _save_qc_figure(dotplot.fig, output_dir / "marker_dotplot.png")
+        suffix = "" if page_number == 1 else f"_{page_number}"
+        _save_qc_figure(dotplot.fig, output_dir / f"marker_dotplot{suffix}.png")
 
     genes = [gene for gene in spatial_markers if gene in adata.var_names]
     if genes:
