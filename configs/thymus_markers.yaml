@@ -1,28 +1,213 @@
-# Exploratory mouse marker panels for reviewing 8-µm bin clusters.
-# Co-expression in a bin does not establish a single-cell identity.
-# Pth-associated and muscle expression require anatomical context.
-# Sources: mouse TECs https://elifesciences.org/articles/69982
-# Mouse thymocytes https://www.nature.com/articles/s41590-023-01584-0
-# Mouse stroma https://www.nature.com/articles/s41586-018-0346-1
-# Stromal lineages https://www.nature.com/articles/s41467-021-21346-6
-# Pth context https://pmc.ncbi.nlm.nih.gov/articles/PMC3009658/
+# Consolidated reference for reviewing filtered 8-µm bins.
+# Extra metadata is saved with the marker lists in the annotation run.json.
+version: thymus_annotation_markers_v1
+updated: "2026-10-19"
+species: Mus musculus
+purpose: Broad cell-type annotation with thymocyte, epithelial and proliferation programs.
+validation_status: Working reference; assay coverage and cluster identities require review.
+
 panels:
   T lineage: [Cd3d, Cd3e, Trbc1]
-  Immature thymocytes: [Dntt, Rag1, Rag2, Ptcra]
+  Immature thymocytes: [Rag1, Rag2, Ptcra]
   CD4 and CD8: [Cd4, Cd8a, Cd8b1]
+  Regulatory T: [Foxp3, Ctla4, Ikzf2]
+  Gamma-delta T: [Trdc, Cd3g]
+  NK and cytotoxic: [Nkg7, Klrd1, Ncr1]
+  B lineage: [Cd79a, Cd19, Ms4a1]
+  Plasma cells: [Mzb1, Jchain, Sdc1]
+  Myeloid: [Lyz2, Lst1, Fcer1g]
+  Macrophages: [C1qa, C1qb, C1qc]
+  Conventional DC: [Xcr1, Clec9a, Flt3]
+  Plasmacytoid DC: [Tcf4, Siglech, Bst2]
+  Neutrophils: [Csf3r, S100a8, S100a9]
+  Mast cells: [Ms4a2, Cpa3, Tpsb2]
+  Erythroid: [Hba-a1, Hba-a2, Hbb-bs]
   Epithelium: [Epcam, Krt8, Krt18, Foxn1]
   Cortical epithelium: [Psmb11, Prss16, Ccl25]
   Medullary epithelium: [Aire, Fezf2, Ccl21a, Krt5]
-  B lineage: [Cd79a, Cd19, Ms4a1]
-  Myeloid: [Lyz2, Csf1r, Adgre1]
-  Endothelium: [Pecam1, Cdh5, Kdr]
+  Endothelium: [Pecam1, Cdh5, Kdr, Vwf]
   Fibroblasts: [Col1a1, Col1a2, Dcn, Lum]
+  Pericytes: [Pdgfrb, Rgs5, Cspg4, Mcam]
   Smooth muscle: [Acta2, Tagln, Myh11]
-  Pericytes: [Pdgfrb, Rgs5, Cspg4]
-  Skeletal muscle: [Acta1, Myh1, Myh2, Tnnt3]
-  Erythroid: [Hba-a1, Hbb-bs, Alas2]
-  Pth-associated: [Pth, Chga, Gcm2]
-  Proliferation: [Mki67, Top2a]
+  Skeletal muscle: [Acta1, Myh1, Tnnt3]
+  Mesothelial: [Msln, Wt1, Calb2]
+  Adipocytes: [Adipoq, Fabp4, Lpl]
+  Pth-associated: [Pth, Gcm2]
+  Proliferation: [Mki67, Top2a, Pcna]
+
 spatial_markers:
-  [Cd3e, Rag1, Cd4, Cd8a, Epcam, Psmb11, Aire, Cd79a, Lyz2,
-   Pecam1, Col1a1, Acta2, Acta1, Pth, Mki67]
+  [Cd3e, Rag1, Cd4, Cd8a, Foxp3, Cd79a, Lyz2, C1qa, Xcr1, Siglech,
+   Nkg7, Epcam, Psmb11, Aire, Pecam1, Col1a1, Acta2, Acta1, Msln, Pth, Mki67]
+
+# For user tables, source/column names preserve the original categorization.
+# A source entry records provenance, not proof of marker specificity.
+gene_sources:
+  Cd3d: [lung/CD8_T]
+  Cd3e: [jpa/T_cell]
+  Trbc1: [lung/Treg, steier_2023]
+  Rag1: [lung/CD4_CD8_T]
+  Rag2: [steier_2023]
+  Ptcra: [kernfeld_2018]
+  Cd4: [jpa/T_cell]
+  Cd8a: [jpa/T_cell]
+  Cd8b1: [lung/CD4_CD8_T]
+  Foxp3: [steier_2023]
+  Ctla4: [lung/Treg]
+  Ikzf2: [lung/Treg]
+  Trdc: [lung/gd_T]
+  Cd3g: [lung/gd_T]
+  Nkg7: [jpa/NK_cell]
+  Klrd1: [jpa/NK_cell]
+  Ncr1: [steier_2023]
+  Cd79a: [jpa/B_cell]
+  Cd19: [jpa/B_cell]
+  Ms4a1: [jpa/B_cell]
+  Mzb1: [jpa/Plasma_cell]
+  Jchain: [jpa/Plasma_cell]
+  Sdc1: [jpa/Plasma_cell]
+  Lyz2: [lung/Mono]
+  Lst1: [lung/Mono]
+  Fcer1g: [lung/Mono]
+  C1qa: [jpa/Macrophage]
+  C1qb: [jpa/Macrophage]
+  C1qc: [jpa/Macrophage]
+  Xcr1: [jpa/cDC]
+  Clec9a: [jpa/cDC]
+  Flt3: [lung/DC2]
+  Tcf4: [jpa/pDC]
+  Siglech: [voboril_2020]
+  Bst2: [voboril_2020]
+  Csf3r: [jpa/Neutrophil]
+  S100a8: [lung/Neut1]
+  S100a9: [lung/Neut1]
+  Ms4a2: [jpa/Mast_cell]
+  Cpa3: [jpa/Mast_cell]
+  Tpsb2: [jpa/Mast_cell]
+  Hba-a1: [jpa/RBC]
+  Hba-a2: [jpa/RBC]
+  Hbb-bs: [steier_2023]
+  Epcam: [tec_programming_2024]
+  Krt8: [tec_programming_2024]
+  Krt18: [tec_programming_2024]
+  Foxn1: [tec_programming_2024]
+  Psmb11: [lopes_2022]
+  Prss16: [lopes_2022]
+  Ccl25: [tec_programming_2024]
+  Aire: [lopes_2022]
+  Fezf2: [lopes_2022]
+  Ccl21a: [lopes_2022]
+  Krt5: [lopes_2022]
+  Pecam1: [jpa/EC]
+  Cdh5: [jpa/EC]
+  Kdr: [lung/aCap]
+  Vwf: [jpa/EC]
+  Col1a1: [jpa/Fibroblast]
+  Col1a2: [jpa/Fibroblast]
+  Dcn: [jpa/Fibroblast]
+  Lum: [jpa/Fibroblast]
+  Pdgfrb: [jpa/Pericyte]
+  Rgs5: [jpa/Pericyte]
+  Cspg4: [jpa/Pericyte]
+  Mcam: [jpa/Pericyte]
+  Acta2: [lung/Pericyte1]
+  Tagln: [lung/Pericyte1]
+  Myh11: [lung/Pericyte1]
+  Acta1: [muscle_2023]
+  Myh1: [muscle_2023]
+  Tnnt3: [muscle_2023]
+  Msln: [jpa/Mesothelial]
+  Wt1: [jpa/Mesothelial]
+  Calb2: [jpa/Mesothelial]
+  Adipoq: [jpa/Adipocyte]
+  Fabp4: [jpa/Adipocyte]
+  Lpl: [jpa/Adipocyte]
+  Pth: [liu_2010]
+  Gcm2: [liu_2010]
+  Mki67: [jpa/Proliferation]
+  Top2a: [steier_2023]
+  Pcna: [jpa/Proliferation]
+
+sources:
+  jpa:
+    type: user_marker_table
+    file: jpa_mouse_markers.csv
+    sha256: 008f7809aa57678312ec55c6c471e218b80f637881a8e361f7c2052ee13d4aad
+    species: mouse
+    context: Broad marker table supplied from the user's lung scRNA workflow.
+    original_publication: Not recorded in the source file.
+  lung:
+    type: user_marker_table
+    file: mouse_lung_markers.csv
+    sha256: 7c3afa909f6388c24400226689711e3e67e13788e75851396370383d0846b4aa
+    species: mouse
+    context: Lung subtype marker table supplied from the user's scRNA workflow.
+    original_publication: Not recorded in the source file.
+  steier_2023:
+    type: primary_research
+    url: https://www.nature.com/articles/s41590-023-01584-0
+    species: mouse
+    context: Thymocyte development; extended-data RNA marker heatmap.
+  kernfeld_2018:
+    type: primary_research
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC6013397/
+    species: mouse
+    context: Thymus organogenesis; Ptcra expression in developing thymocyte clusters.
+  lopes_2022:
+    type: primary_research
+    url: https://elifesciences.org/articles/69982
+    species: mouse
+    context: TEC subset markers in the single-cell reanalysis.
+  tec_programming_2024:
+    type: primary_research
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC11369686/
+    species: mouse
+    context: FOXN1-induced TECs and fetal TEC comparators; Figures 3 and 4.
+  voboril_2020:
+    type: primary_research
+    url: https://www.nature.com/articles/s41467-020-16081-3
+    species: mouse
+    context: Thymic DC populations; Figure 5b and Supplementary Data 5.
+  muscle_2023:
+    type: primary_research
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC10245980/
+    species: mouse
+    context: Skeletal-muscle myonuclei; refined analysis of myogenic subsets.
+  liu_2010:
+    type: primary_research
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC3009658/
+    species: mouse
+    context: Distinguishes thymus-associated parathyroid Pth from mTEC Pth expression.
+
+interpretation:
+  general: >-
+    Assign broad labels from several concordant genes, cluster-enriched genes and
+    H&E. These groups overlap biologically; they are not mutually exclusive cell
+    classes or a trained classifier. Check marker_coverage.csv before using absence
+    as evidence. Proliferation is a state. Mixed bins may remain unassigned.
+  lymphoid: >-
+    Rag genes also occur in B-cell precursors. Cd3g supports T lineage, not gamma-delta
+    identity alone. CD4/CD8 co-expression can reflect immature thymocytes or mixed
+    bins. Nkg7/Klrd1 are shared with cytotoxic T cells; interpret Ncr1 with T markers.
+    Ctla4/Ikzf2 require Foxp3 and T-lineage context for a regulatory-T label.
+  myeloid: >-
+    Lyz2/Lst1/Fcer1g are broad myeloid signals. Xcr1/Clec9a emphasize cDC1 and Flt3
+    does not identify a DC subtype alone. Bst2 may reflect interferon activation;
+    use it with Siglech/Tcf4. S100a8/S100a9 also occur in inflammatory monocytes.
+  epithelium: >-
+    Keratins are not thymus-specific. Establish epithelial and Foxn1 context before
+    cortex/medulla labels. Ccl21a also marks lymphatic endothelium; Krt5 is shared
+    with other epithelia. The medullary list spans several mTEC states.
+  stroma: >-
+    Contractile genes overlap between smooth muscle, pericytes and myofibroblasts.
+    The lung Pericyte1 genes are reviewed here as a contractile program, not copied
+    as a definitive pericyte label. Fabp4/Lpl need Adipoq and anatomical support.
+  anatomical_exclusion: >-
+    Muscle or Pth expression alone does not define an exclusion mask. Require
+    coherent spatial expression and H&E; Pth can also originate from mTECs.
+
+selection_notes:
+  - Broad source categories were selected; lung-specific epithelial and vascular subtype labels were not transferred.
+  - Cga and Plvap2 were not imported; their intended use in the JPA table needs clarification.
+  - Stfpc, Stfpa1 and Tgbfi were not imported; probable spelling errors remain unchanged in the source files.
+  - Hbb-b1 was not silently mapped to Hbb-bs; Hbb-bs has its own published mouse-thymocyte source.
+  - Dntt, Csf1r, Adgre1, Myh2, Alas2 and Chga were omitted from the initial list to keep this selection compact and explicitly sourced; this is not evidence against their biological relevance.

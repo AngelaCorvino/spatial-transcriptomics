@@ -230,7 +230,10 @@ The root contains `annotation_summary.csv` and `run.json`. Download the PNG/CSV
 files for review; matrices can remain on the cluster. The workflow refuses to
 overwrite an existing output directory; use `--output-dir` for a separate rerun.
 
-[Marker panels](configs/thymus_markers.yaml) cover thymic and surrounding tissue.
+[Marker panels](configs/thymus_markers.yaml) combine the supplied lung marker tables
+with mouse thymus references. Version `thymus_annotation_markers_v1` records each
+gene's source, source-table hashes and interpretation notes; the complete selection
+is captured in `run.json`. The panel guides annotation plots, not clustering.
 Missing genes are recorded separately from present genes with no detected counts.
 Assign broad labels using multiple markers, spatial location and H&E; retain a
 mixed or uncertain label where needed. Cluster IDs differ between mice.
