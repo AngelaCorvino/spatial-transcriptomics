@@ -234,6 +234,14 @@ def cluster_and_umap(
         use_rep="X_pca",
         random_state=random_state,
     )
+    cluster_leiden(adata, resolution=resolution, random_state=random_state)
+    sc.tl.umap(adata, min_dist=0.1, spread=1.0, random_state=random_state)
+    return adata
+
+
+def cluster_leiden(adata, *, resolution, random_state=0):
+    """Recluster the existing neighbor graph without changing its embedding."""
+    sc = _load_scanpy()
     sc.tl.leiden(
         adata,
         resolution=resolution,
@@ -243,8 +251,6 @@ def cluster_and_umap(
         n_iterations=2,
         random_state=random_state,
     )
-    sc.tl.umap(adata, min_dist=0.1, spread=1.0, random_state=random_state)
-    return adata
 
 
 def summarize_annotation_markers(adata: Any, panels: dict[str, list[str]]):

@@ -201,33 +201,48 @@ bins and marker-based annotation to identify ten broad cell types.
 
 The existing clustering script accepts the completed QC v1 matrices. It processes
 each mouse independently: normalize to 10,000 counts per bin, log2-transform,
-select 2,000 variable genes, and run PCA, neighbours, Leiden (resolution 0.5),
-and UMAP. MT genes are excluded from the embedding; all retained bins, gene
+select 2,000 variable genes, and run PCA, neighbours, Leiden and UMAP.
+The pilot compares resolutions **0.1, 0.2 and 0.3** on the same graph and UMAP
+for each mouse. MT genes are excluded from the embedding; all retained bins, gene
 features, and original counts are preserved. No batch correction is applied.
 
-Install the clustering extra in the cluster environment, then submit from the
-repository root:
+Start with FD1 and FD2 to review clustering and annotation. Install the clustering
+extra in the cluster environment, then submit from the repository root:
 
 ```bash
 conda activate /home/acorvino/.envs/python-env
 python -m pip install -e '.[annotation]'
 mkdir -p logs
-sbatch cluster/slurm_03_integration.sh --visium-hd --all-mice \
-  --he-source-root /oak/stanford/groups/dirbas/raw/Dirbas_Processed_Visium_HD_Data
+sbatch --job-name=resolutions_FD1_FD2 cluster/slurm_03_integration.sh \
+  --visium-hd --mice FD1 FD2 --resolutions 0.1 0.2 0.3 \
+  --he-source-root /oak/stanford/groups/dirbas/raw/Dirbas_Processed_Visium_HD_Data \
+  --output-dir /labs/dirbas/acorvino/thymus_9h/processed_data/integration/visium_hd_008um_pilot_FD1_FD2_resolutions
 ```
 
-Outputs use `integration/visium_hd_008um/FD1` through `FD12`:
+The pilot writes `FD1/` and `FD2/` under
+`integration/visium_hd_008um_pilot_FD1_FD2_resolutions/`. Each sample contains:
 
 - `clustered_bins.h5ad`: log-normalized expression, raw counts in `layers['counts']`,
-  spatial coordinates, PCA, graph, UMAP and sample-specific cluster IDs.
-- `clusters.png`, `marker_dotplot*.png`, `marker_spatial.png`: annotation views.
+  spatial coordinates and one shared PCA, graph and UMAP. The three label columns
+  are `leiden_r0.1`, `leiden_r0.2` and `leiden_r0.3`; no final resolution is selected.
+- `resolution_comparison.png`: UMAP and spatial clusters for all three resolutions.
+- `cluster_assignments.csv`: barcode-to-cluster labels for each resolution,
+  suitable for importing as categories in the matching 8-µm Loupe file.
+- `marker_coverage.csv` and `marker_spatial.png`: shared marker coverage and maps.
 - `qc_failures_he.png`: actual QC v1 failures on H&E, when `--he-source-root` is given.
-- `marker_coverage.csv`, `marker_expression.csv`, `cluster_markers.csv`: marker evidence.
-- `cluster_annotation.csv`: cluster sizes, QC metrics and top genes, with broad
-  cell-type/tissue labels to complete after reviewing the plots and markers.
+- `resolution_0.1/`, `resolution_0.2/` and `resolution_0.3/`: each contains
+  `clusters.png`, `marker_dotplot*.png`, `marker_expression.csv`,
+  `cluster_markers.csv` and `cluster_annotation.csv` (sizes, QC metrics, top genes
+  and blank tissue labels for review). Matrices are not duplicated here.
 
-The root contains `annotation_summary.csv` and `run.json`. Download the PNG/CSV
-files for review; matrices can remain on the cluster. The workflow refuses to
+The root contains `annotation_summary.csv` (one row per mouse/resolution) and
+`run.json`. The summary includes cluster counts, bins in clusters smaller than
+100 bins, and the number of connected components in the neighbor graph. The
+100-bin category is descriptive and does not exclude bins. Cluster IDs and colors
+are specific to each mouse and resolution.
+
+Download the PNG/CSV files for review; matrices can remain on the cluster.
+The workflow refuses to
 overwrite an existing output directory; use `--output-dir` for a separate rerun.
 
 [The marker CSV](configs/thymus_markers.csv) contains 5–6 genes per group, with
@@ -246,8 +261,11 @@ mixed or uncertain label where needed. Cluster IDs differ between mice.
 Marker ranks describe cluster-vs-rest expression, not treatment effects.
 
 Implementation follows [Scanpy's clustering workflow](https://scanpy.scverse.org/en/stable/tutorials/basics/clustering.html).
-Use `--mice FD5 FD9` for a subset; resolution and embedding dimensions can be
-changed through the CLI without changing the QC filter.
+After reviewing the pilot, use `--all-mice` for the full cohort. Resolution and
+embedding dimensions can be changed through the CLI without changing the QC filter.
+Use `--resolution 0.2` for a single run with review files directly in each mouse
+folder; `--resolutions` defaults to the three pilot values above.
+Without an output override, results use `integration/visium_hd_008um/`.
 
 Local and cluster configs differ in environment settings, output directories,
 and cluster-specific submission options, while the analysis code remains shared

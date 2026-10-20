@@ -201,8 +201,9 @@ def _annotation_fixture(mouse):
     return apply_hd_qc_filter(adata, ["mt-Nd1"])
 
 
+@pytest.mark.parametrize("resolutions", [[0.2], [0.1, 0.2, 0.3]])
 def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, resolutions
 ):
     """Exercise real sparse normalization, clustering, marker ranking and plots."""
     pytest.importorskip("igraph")
@@ -261,7 +262,8 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
         n_top_genes=40,
         n_pcs=5,
         n_neighbors=10,
-        resolution=0.5,
+        resolution=None,
+        resolutions=resolutions,
         seed=0,
     )
     config = {"repo_root": str(repo), "data_dir": str(tmp_path / "raw")}
@@ -275,11 +277,27 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
         "load_visium_hd_histology",
         lambda *_: (np.ones((220, 220, 3)), 1.0),
     )
+    embeddings = {}
+    cluster = script["cluster_and_umap"]
+
+    def capture_embedding(adata, **kwargs):
+        mouse = adata.obs["sample_id"].iloc[0]
+        assert mouse not in embeddings  # One PCA/graph/UMAP per mouse.
+        cluster(adata, **kwargs)
+        embeddings[mouse] = (
+            adata.obsm["X_pca"].copy(),
+            adata.obsm["X_umap"].copy(),
+            adata.obsp["connectivities"].copy(),
+        )
+
+    monkeypatch.setitem(run.__globals__, "cluster_and_umap", capture_embedding)
     assert run(args, config) == 0
     manifest = json.loads((output_dir / "run.json").read_text())
     assert manifest["status"] == "complete"
     assert manifest["completed_mice"] == ["FD1", "FD2"]
     assert manifest["batch_correction"] is False
+    assert manifest["settings"]["resolutions"] == resolutions
+    assert manifest["shared_embedding"] is True
     assert manifest["markers"]["table"] == marker_table.to_dict("records")
     assert (
         manifest["markers"]["sha256"]
@@ -287,6 +305,8 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
     )
     summary = pd.read_csv(output_dir / "annotation_summary.csv")
     assert summary["marker_genes_present"].eq(3).all()
+    assert len(summary) == 2 * len(resolutions)
+    assert set(summary["resolution"]) == set(resolutions)
     for mouse in ["FD1", "FD2"]:
         sample = output_dir / mouse
         restored = ad.read_h5ad(sample / "clustered_bins.h5ad")
@@ -301,7 +321,20 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
         expected = np.log2(1 + expected * 10000 / expected.sum(axis=1)[:, None])
         np.testing.assert_allclose(restored.X.toarray(), expected, rtol=1e-6)
         assert not restored.var.loc["mt-Nd1", "highly_variable"]
-        assert restored.obs["leiden"].nunique() >= 2
+        pca, umap, graph = embeddings[mouse]
+        np.testing.assert_array_equal(restored.obsm["X_pca"], pca)
+        np.testing.assert_array_equal(restored.obsm["X_umap"], umap)
+        assert (restored.obsp["connectivities"] != graph).nnz == 0
+        assignments = pd.read_csv(
+            sample / "cluster_assignments.csv", index_col="barcode", dtype=str
+        )
+        assert assignments.index.equals(original.obs_names)
+        assert assignments.columns.tolist() == [f"leiden_r{r:g}" for r in resolutions]
+        if len(resolutions) > 1:
+            assert "leiden" not in restored.obs
+            assert (sample / "resolution_comparison.png").stat().st_size > 1000
+        else:
+            assert restored.obs["leiden"].nunique() >= 2
         assert (
             restored.uns["tissue_annotation"]["status"] == "clusters_ready_for_review"
         )
@@ -316,17 +349,29 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
         assert pd.isna(coverage.loc["Absent", "bins_expressing"])
         assert coverage.loc["Zero", "in_matrix"]
         assert coverage.loc["Zero", "bins_expressing"] == 0
-        labels = pd.read_csv(sample / "cluster_annotation.csv")
-        assert labels["bins"].sum() == original.n_obs
-        assert labels["annotation_status"].eq("unreviewed").all()
-        assert labels["tissue_annotation"].isna().all()
-        assert (sample / "cluster_markers.csv").stat().st_size > 0
-        for name in [
-            "clusters.png",
-            "marker_dotplot.png",
-            "marker_spatial.png",
-            "qc_failures_he.png",
-        ]:
+        for resolution in resolutions:
+            key = f"leiden_r{resolution:g}"
+            assert restored.obs[key].nunique() >= 2
+            assert assignments[key].tolist() == restored.obs[key].astype(str).tolist()
+            review = sample
+            if len(resolutions) > 1:
+                review = sample / f"resolution_{resolution:g}"
+            labels = pd.read_csv(review / "cluster_annotation.csv")
+            assert labels["bins"].sum() == original.n_obs
+            assert labels["resolution"].eq(resolution).all()
+            assert labels["annotation_status"].eq("unreviewed").all()
+            assert labels["tissue_annotation"].isna().all()
+            sizes = restored.obs[key].value_counts()
+            row = summary.loc[
+                summary["mouse_id"].eq(mouse) & summary["resolution"].eq(resolution)
+            ].iloc[0]
+            assert row["clusters"] == len(sizes)
+            assert row["bins_in_clusters_below_100"] == sizes[sizes < 100].sum()
+            for name in ["cluster_markers.csv", "marker_expression.csv"]:
+                assert (review / name).stat().st_size > 0
+            for name in ["clusters.png", "marker_dotplot.png"]:
+                assert (review / name).stat().st_size > 1000
+        for name in ["marker_spatial.png", "qc_failures_he.png"]:
             assert (sample / name).stat().st_size > 1000
     with pytest.raises(FileExistsError):
         run(args, config)
@@ -340,6 +385,15 @@ def test_hd_annotation_run_preserves_counts_and_writes_review_evidence(
     failed = json.loads((args.output_dir / "run.json").read_text())
     assert failed["status"] == "failed" and not failed["completed_mice"]
     assert not (args.output_dir / "FD1" / "clustered_bins.h5ad").exists()
+
+
+def test_hd_annotation_defaults_to_requested_resolution_comparison(monkeypatch):
+    repo = Path(__file__).resolve().parents[1]
+    script = runpy.run_path(str(repo / "scripts/03_integration.py"))
+    monkeypatch.setattr("sys.argv", ["03_integration.py", "--visium-hd"])
+    args = script["parse_args"]()
+    assert args.resolution is None
+    assert args.resolutions == [0.1, 0.2, 0.3]
 
 
 @pytest.mark.parametrize(

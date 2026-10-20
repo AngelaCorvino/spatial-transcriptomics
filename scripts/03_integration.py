@@ -19,6 +19,7 @@ import pandas as pd
 from spatial_transcriptomics.analysis import (
     HD_QC_FILTER_VERSION,
     cluster_and_umap,
+    cluster_leiden,
     compute_statistics,
     prepare_results,
     rank_annotation_markers,
@@ -36,7 +37,11 @@ from spatial_transcriptomics.data import (
     load_visium_hd_histology,
     normalize_and_log,
 )
-from spatial_transcriptomics.plotting import plot_hd_annotation, plot_hd_qc_histology
+from spatial_transcriptomics.plotting import (
+    plot_hd_annotation,
+    plot_hd_qc_histology,
+    plot_hd_resolution_comparison,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,7 +74,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-top-genes", type=int, default=2000)
     parser.add_argument("--n-pcs", type=int, default=30)
     parser.add_argument("--n-neighbors", type=int, default=15)
-    parser.add_argument("--resolution", type=float, default=0.5)
+    clustering = parser.add_mutually_exclusive_group()
+    clustering.add_argument("--resolution", type=float, help="Run one HD resolution.")
+    clustering.add_argument(
+        "--resolutions",
+        type=float,
+        nargs="+",
+        default=[0.1, 0.2, 0.3],
+        help="HD resolutions to compare on the same graph (default: 0.1 0.2 0.3).",
+    )
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
 
@@ -135,10 +148,57 @@ def validate_filtered_input(adata, mouse, expected):
         raise ValueError(f"{mouse}: invalid spatial coordinates.")
 
 
+def write_cluster_review(adata, mouse, resolution, markers, output_dir):
+    """Write marker and QC tables for the current Leiden labels."""
+    ranks = rank_annotation_markers(adata)
+    ranks.to_csv(output_dir / "cluster_markers.csv", index=False)
+    coverage, expression = summarize_annotation_markers(adata, markers["panels"])
+    expression.to_csv(output_dir / "marker_expression.csv", index=False)
+    summary = adata.obs.groupby("leiden", observed=True).agg(
+        bins=("total_counts", "size"),
+        median_umis=("total_counts", "median"),
+        median_genes=("n_genes_by_counts", "median"),
+        median_mt_pct=("pct_counts_mt", "median"),
+    )
+    summary["mouse_id"] = mouse
+    summary["resolution"] = resolution
+    summary["top_genes"] = [
+        "; ".join(
+            ranks.loc[ranks["group"].astype(str).eq(str(cluster)), "names"].head(10)
+        )
+        for cluster in summary.index
+    ]
+    summary["tissue_annotation"] = ""
+    summary["annotation_status"] = "unreviewed"
+    summary["notes"] = ""
+    summary.index.name = "cluster"
+    summary.to_csv(output_dir / "cluster_annotation.csv")
+    small = summary["bins"] < 100
+    return coverage, {
+        "mouse_id": mouse,
+        "resolution": resolution,
+        "bins": adata.n_obs,
+        "features": adata.n_vars,
+        "clusters": len(summary),
+        "clusters_below_100_bins": int(small.sum()),
+        "bins_in_clusters_below_100": int(summary.loc[small, "bins"].sum()),
+        "bins_in_clusters_below_100_pct": float(
+            100 * summary.loc[small, "bins"].sum() / adata.n_obs
+        ),
+        "hvg_genes": int(adata.var["highly_variable"].sum()),
+        "marker_genes_present": int(
+            coverage.loc[coverage["in_matrix"], "gene"].nunique()
+        ),
+        "annotation_status": "unreviewed",
+    }
+
+
 def cluster_hd_mouse(
-    mouse, input_dir, output_dir, expected, markers, settings, he_root
+    mouse, input_dir, output_dir, expected, markers, settings, he_root, resolutions
 ):
     """Produce clustering and marker evidence; leave tissue labels for review."""
+    from scipy.sparse.csgraph import connected_components
+
     source = input_dir / mouse / "filtered_counts.h5ad"
     adata = load_data(source)
     validate_filtered_input(adata, mouse, expected)
@@ -166,40 +226,60 @@ def cluster_hd_mouse(
     cluster_and_umap(
         adata,
         **settings,
+        resolution=resolutions[0],
         exclude_genes=list(adata.uns["qc_filter"]["mt_genes_matched"]),
     )
-    ranks = rank_annotation_markers(adata)
-    ranks.to_csv(sample_dir / "cluster_markers.csv", index=False)
-    coverage, expression = summarize_annotation_markers(adata, markers["panels"])
-    coverage.to_csv(sample_dir / "marker_coverage.csv", index=False)
-    expression.to_csv(sample_dir / "marker_expression.csv", index=False)
-    summary = adata.obs.groupby("leiden", observed=True).agg(
-        bins=("total_counts", "size"),
-        median_umis=("total_counts", "median"),
-        median_genes=("n_genes_by_counts", "median"),
-        median_mt_pct=("pct_counts_mt", "median"),
-    )
-    summary["mouse_id"] = mouse
-    summary["top_genes"] = [
-        "; ".join(
-            ranks.loc[ranks["group"].astype(str).eq(str(cluster)), "names"].head(10)
+    graph_components = int(
+        connected_components(
+            adata.obsp["connectivities"], directed=False, return_labels=False
         )
-        for cluster in summary.index
-    ]
-    summary["tissue_annotation"] = ""
-    summary["annotation_status"] = "unreviewed"
-    summary["notes"] = ""
-    summary.index.name = "cluster"
-    summary.to_csv(sample_dir / "cluster_annotation.csv")
-    plot_hd_annotation(
-        adata,
-        mouse,
-        markers["panels"],
-        markers["spatial_markers"],
-        sample_dir,
-        image=image,
-        scale=scale,
     )
+    summaries = []
+    cluster_keys = {}
+    for index, resolution in enumerate(resolutions):
+        print(f"{mouse}: reviewing resolution {resolution:g}", flush=True)
+        if index:
+            cluster_leiden(
+                adata, resolution=resolution, random_state=settings["random_state"]
+            )
+        key = f"leiden_r{resolution:g}"
+        adata.obs[key] = adata.obs["leiden"].copy()
+        adata.uns[key] = adata.uns["leiden"].copy()
+        cluster_keys[f"{resolution:g}"] = key
+        review_dir = sample_dir
+        if len(resolutions) > 1:
+            review_dir = sample_dir / f"resolution_{resolution:g}"
+            review_dir.mkdir()
+        coverage, summary = write_cluster_review(
+            adata, mouse, resolution, markers, review_dir
+        )
+        if index == 0:
+            coverage.to_csv(sample_dir / "marker_coverage.csv", index=False)
+        plot_hd_annotation(
+            adata,
+            mouse,
+            markers["panels"],
+            markers["spatial_markers"] if index == 0 else [],
+            review_dir,
+            image=image,
+            scale=scale,
+            resolution=resolution,
+            marker_output_dir=sample_dir,
+        )
+        summary["he_overlays"] = image is not None
+        summary["neighbor_graph_components"] = graph_components
+        summaries.append(summary)
+    adata.obs[list(cluster_keys.values())].to_csv(
+        sample_dir / "cluster_assignments.csv", index_label="barcode"
+    )
+    if len(resolutions) > 1:
+        plot_hd_resolution_comparison(
+            adata, mouse, cluster_keys, sample_dir, image=image, scale=scale
+        )
+        # No resolution is selected as final; retain only explicitly named labels.
+        del adata.obs["leiden"]
+        adata.uns.pop("leiden", None)
+        adata.uns.pop("rank_genes_groups", None)
     if selection is not None:
         plot_hd_qc_histology(selection, mouse, image, scale, sample_dir, applied=True)
     adata.uns["tissue_annotation"] = {
@@ -208,26 +288,17 @@ def cluster_hd_mouse(
         "normalization": "log2(1 + counts per 10000)",
         "raw_counts_layer": "counts",
         "batch_correction": False,
-        "cluster_ids_are_sample_specific": True,
+        "cluster_ids_are_sample_and_resolution_specific": True,
+        "cluster_keys": cluster_keys,
+        "shared_embedding": True,
         "mt_excluded_from_pca": True,
-        "settings": settings,
+        "settings": {**settings, "resolutions": resolutions},
         "marker_ranking": "t-test_overestim_var; descriptive cluster-vs-rest only",
     }
     temporary = sample_dir / "clustered_bins.partial.h5ad"
     adata.write_h5ad(temporary, compression="gzip")
     temporary.replace(sample_dir / "clustered_bins.h5ad")
-    return {
-        "mouse_id": mouse,
-        "bins": adata.n_obs,
-        "features": adata.n_vars,
-        "clusters": len(summary),
-        "hvg_genes": int(adata.var["highly_variable"].sum()),
-        "marker_genes_present": int(
-            coverage.loc[coverage["in_matrix"], "gene"].nunique()
-        ),
-        "annotation_status": "unreviewed",
-        "he_overlays": image is not None,
-    }
+    return summaries
 
 
 def run_visium_hd_annotation(args, config):
@@ -248,6 +319,14 @@ def run_visium_hd_annotation(args, config):
         or any(re.fullmatch(r"FD(?:[1-9]|1[0-2])", mouse) is None for mouse in mice)
     ):
         raise ValueError("Specify --all-mice or unique --mice FD1 … FD12.")
+    resolutions = [args.resolution] if args.resolution is not None else args.resolutions
+    if (
+        not resolutions
+        or not np.isfinite(resolutions).all()
+        or any(value <= 0 for value in resolutions)
+        or len({f"{value:g}" for value in resolutions}) != len(resolutions)
+    ):
+        raise ValueError("Specify unique, finite, positive resolutions.")
     repo = get_config_path(config, "repo_root", ".")
     paths = get_config_section(config, "paths")
     input_dir = (
@@ -299,7 +378,6 @@ def run_visium_hd_annotation(args, config):
         "n_top_genes": args.n_top_genes,
         "n_pcs": args.n_pcs,
         "n_neighbors": args.n_neighbors,
-        "resolution": args.resolution,
         "random_state": args.seed,
     }
     run = {
@@ -310,7 +388,8 @@ def run_visium_hd_annotation(args, config):
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "input_dir": str(input_dir),
         "output_dir": str(output_dir),
-        "settings": settings,
+        "settings": {**settings, "resolutions": resolutions},
+        "shared_embedding": True,
         "normalization": "log2(1 + counts per 10000)",
         "batch_correction": False,
         "markers": markers,
@@ -334,7 +413,7 @@ def run_visium_hd_annotation(args, config):
             print(
                 f"{mouse}: clustering filtered bins for tissue annotation", flush=True
             )
-            summaries.append(
+            summaries.extend(
                 cluster_hd_mouse(
                     mouse,
                     input_dir,
@@ -343,6 +422,7 @@ def run_visium_hd_annotation(args, config):
                     markers,
                     settings,
                     he_root,
+                    resolutions,
                 )
             )
             pd.DataFrame(summaries).to_csv(

@@ -217,21 +217,10 @@ def plot_hd_qc_histology(
         plt.close(fig)
 
 
-def plot_hd_annotation(
-    adata,
-    mouse_id,
-    panels,
-    spatial_markers,
-    output_dir,
-    *,
-    image=None,
-    scale=1.0,
-):
-    """Save cluster and marker views; use the same cluster colours in both spaces."""
-    import scanpy as sc
+def _plot_hd_cluster_pair(adata, labels, axes, *, image=None, scale=1.0):
+    """Draw matching UMAP and spatial labels on a supplied pair of axes."""
     from matplotlib.patches import Patch
 
-    labels = adata.obs["leiden"]
     categories = labels.cat.categories
     codes = labels.cat.codes.to_numpy()
     colors = plt.get_cmap(
@@ -243,17 +232,6 @@ def plot_hd_annotation(
     )
     keep = np.ones(adata.n_obs, dtype=bool)
 
-    def spatial_panel(ax, values):
-        if image is not None:
-            ax.imshow(image, origin="upper")
-        mesh = plot_hd_spatial(ax, qc, keep, values, show_excluded=False)
-        if image is not None:
-            mesh.set_alpha(0.7)
-            ax.set_xlim(-0.5, image.shape[1] - 0.5)
-            ax.set_ylim(image.shape[0] - 0.5, -0.5)
-        return mesh
-
-    fig, axes = plt.subplots(1, 2, figsize=(15, 7), constrained_layout=True)
     umap = adata.obsm["X_umap"]
     axes[0].scatter(
         umap[:, 0],
@@ -267,7 +245,13 @@ def plot_hd_annotation(
         rasterized=True,
     )
     axes[0].set(title="UMAP", xlabel="UMAP 1", ylabel="UMAP 2")
-    mesh = spatial_panel(axes[1], codes)
+    if image is not None:
+        axes[1].imshow(image, origin="upper")
+    mesh = plot_hd_spatial(axes[1], qc, keep, codes, show_excluded=False)
+    if image is not None:
+        mesh.set_alpha(0.7)
+        axes[1].set_xlim(-0.5, image.shape[1] - 0.5)
+        axes[1].set_ylim(image.shape[0] - 0.5, -0.5)
     mesh.set_cmap(cmap)
     mesh.set_clim(-0.5, len(categories) - 0.5)
     axes[1].set_title("Clusters on H&E" if image is not None else "Spatial clusters")
@@ -279,8 +263,56 @@ def plot_hd_annotation(
         loc="upper left",
         bbox_to_anchor=(1, 1),
         fontsize=8,
+        ncol=max(1, (len(categories) + 24) // 25),
     )
-    fig.suptitle(f"{mouse_id}: clusters of retained 8 µm bins")
+
+
+def plot_hd_resolution_comparison(
+    adata, mouse_id, cluster_keys, output_dir, *, image=None, scale=1.0
+):
+    """Compare resolutions using the same bins, graph and UMAP coordinates."""
+    fig, axes = plt.subplots(
+        len(cluster_keys),
+        2,
+        figsize=(16, 6 * len(cluster_keys)),
+        squeeze=False,
+        constrained_layout=True,
+    )
+    for row, (resolution, key) in zip(axes, cluster_keys.items()):
+        labels = adata.obs[key]
+        _plot_hd_cluster_pair(adata, labels, row, image=image, scale=scale)
+        row[0].set_title(
+            f"Resolution {resolution} · {labels.nunique()} clusters · UMAP"
+        )
+    fig.suptitle(
+        f"{mouse_id}: resolution comparison\n"
+        "Same filtered bins and embedding; cluster IDs/colors are specific to each row"
+    )
+    _save_qc_figure(fig, output_dir / "resolution_comparison.png")
+
+
+def plot_hd_annotation(
+    adata,
+    mouse_id,
+    panels,
+    spatial_markers,
+    output_dir,
+    *,
+    image=None,
+    scale=1.0,
+    resolution=None,
+    marker_output_dir=None,
+):
+    """Save cluster and marker views; use the same cluster colours in both spaces."""
+    import scanpy as sc
+
+    categories = adata.obs["leiden"].cat.categories
+    title_prefix = mouse_id
+    if resolution is not None:
+        title_prefix += f" · resolution {resolution:g}"
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7), constrained_layout=True)
+    _plot_hd_cluster_pair(adata, adata.obs["leiden"], axes, image=image, scale=scale)
+    fig.suptitle(f"{title_prefix}: clusters of retained 8 µm bins")
     _save_qc_figure(fig, output_dir / "clusters.png")
 
     available = {
@@ -312,7 +344,7 @@ def plot_hd_annotation(
         # Place the title above the rotated marker-panel labels.
         dotplot.fig.canvas.draw()
         top = dotplot.fig.get_tightbbox(dotplot.fig.canvas.get_renderer()).y1
-        title = f"{mouse_id}: marker expression by bin cluster"
+        title = f"{title_prefix}: marker expression by bin cluster"
         if len(panel_items) > 9:
             title += f" · page {page_number}"
         dotplot.fig.suptitle(
@@ -325,6 +357,10 @@ def plot_hd_annotation(
 
     genes = [gene for gene in spatial_markers if gene in adata.var_names]
     if genes:
+        qc = pd.DataFrame(
+            adata.obsm["spatial"] * scale, index=adata.obs_names, columns=["x", "y"]
+        )
+        keep = np.ones(adata.n_obs, dtype=bool)
         nrows = (len(genes) + 2) // 3
         fig, axes = plt.subplots(
             nrows, 3, figsize=(15, 4.5 * nrows), squeeze=False, constrained_layout=True
@@ -334,13 +370,19 @@ def plot_hd_annotation(
             values = np.asarray(
                 values.toarray() if hasattr(values, "toarray") else values
             ).ravel()
-            mesh = spatial_panel(ax, values)
+            if image is not None:
+                ax.imshow(image, origin="upper")
+            mesh = plot_hd_spatial(ax, qc, keep, values, show_excluded=False)
+            if image is not None:
+                mesh.set_alpha(0.7)
+                ax.set_xlim(-0.5, image.shape[1] - 0.5)
+                ax.set_ylim(image.shape[0] - 0.5, -0.5)
             ax.set_title(gene)
             fig.colorbar(mesh, ax=ax, shrink=0.65)
         for ax in list(axes.flat)[len(genes) :]:
             ax.set_axis_off()
         fig.suptitle(f"{mouse_id}: marker expression · log2(1 + counts per 10,000)")
-        _save_qc_figure(fig, output_dir / "marker_spatial.png")
+        _save_qc_figure(fig, (marker_output_dir or output_dir) / "marker_spatial.png")
 
 
 def plot_hd_qc_comparison(
